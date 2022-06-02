@@ -28,8 +28,8 @@ fn main() {
 fn get() -> &'static str {
  "Hello, World!"
 }
- 
+
 #[post("/")]
 fn post(body: Vec<u8>) -> Vec<u8> {
-	"Hi, there!".into()  
+	"Hi, there!".into()
 }
