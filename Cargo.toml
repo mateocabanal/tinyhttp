@@ -2,6 +2,11 @@
 name = "tinyhttp"
 version = "0.2.0"
 edition = "2021"
+authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
+license = "GPL-2.0-or-later"
+keywords = [ "http", "server" ]
+description = "A HTTP library with SSL and GZIP support"
+repository = "https://github.com/mateocabanal/tinyhttp"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

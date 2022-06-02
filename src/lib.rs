@@ -8,7 +8,7 @@
 //! # Example 1: Using a mount point
 //! ```no_run
 //! use std::net::TcpListener;
-//! use tinyhttp::tinyhttp_internal::config::*;
+//! use tinyhttp::internal::config::*;
 
 //! fn main() {
 //!   let socket = TcpListener::bind(":::9001").unwrap();
@@ -26,8 +26,9 @@
 //!
 //! /// Functions marked with the get macro must return with a type of Into<Vec<u8>>
 //! use std::net::TcpListener;
-//! use tinyhttp::tinyhttp_internal::config::*;
-//! use tinyhttp::tinyhttp_codegen::*;
+//! use tinyhttp::internal::config::*;
+//! use tinyhttp::internal::request::Request;
+//! use tinyhttp::codegen::*;
 //!
 //! #[get("/")]
 //! fn get() -> &'static str {
@@ -52,5 +53,5 @@
 //! }
 //! ```
 
-pub use tinyhttp_codegen;
-pub use tinyhttp_internal;
+pub use tinyhttp_codegen as codegen;
+pub use tinyhttp_internal as internal;

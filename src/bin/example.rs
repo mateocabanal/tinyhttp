@@ -1,8 +1,8 @@
 use std::net::TcpListener;
 
-use tinyhttp::tinyhttp_codegen::*;
-use tinyhttp::tinyhttp_internal::config::*;
-use tinyhttp::tinyhttp_internal::request::Request;
+use tinyhttp::internal::config::*;
+use tinyhttp::internal::request::Request;
+use tinyhttp::codegen::*;
 
 #[get("/")]
 fn get() -> &'static str {

@@ -13,7 +13,8 @@ Uses procedural macros for easy API building.
 Example 1:
 ```rust
 use std::net::TcpListener;
-use tinyhttp::config::*;
+use tinyhttp::internal::config::*;
+use tinyhttp::codegen::*;
 
 fn main() {
   let socket = TcpListener::bind(":::9001").unwrap();
