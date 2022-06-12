@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 license = "GPL-2.0-or-later"
@@ -11,5 +11,5 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.0" }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.1" }
 tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.2.0"  }
