@@ -2,7 +2,7 @@
 
 #### This repo contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
 
-#### All internal code is now [HERE](https://github.com/yourlitdaddy/tinyhttp-internal)
+#### All internal code is now [HERE](https://github.com/mateocabanal/tinyhttp-internal)
 
 Speedy HTTP server built purely in Rust. Comes with built-in GZIP compression and HTTPS support.
 
