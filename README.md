@@ -18,7 +18,7 @@ use tinyhttp::codegen::*;
 
 fn main() {
   let socket = TcpListener::bind(":::9001").unwrap();
-	let routes = Routes::new(vec![get()]);
+  let routes = Routes::new(vec![get(), post()]);
   let config = Config::new().routes(routes);
   let http = HttpListener::new(socket, config);
 
@@ -27,10 +27,10 @@ fn main() {
 
 #[get("/")]
 fn get() -> &'static str {
- "Hello, World!"
+  "Hello, World!"
 }
 
 #[post("/")]
-fn post(body: Vec<u8>) -> Vec<u8> {
-	"Hi, there!".into()
+fn post(body: Request) -> Vec<u8> {
+  "Hi, there!".into()
 }
