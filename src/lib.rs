@@ -26,10 +26,7 @@
 //!
 //! /// Functions marked with the get macro must return with a type of Into<Vec<u8>>
 //! use std::net::TcpListener;
-//! use tinyhttp::internal::config::*;
-//! use tinyhttp::internal::request::Request;
-//! use tinyhttp::codegen::*;
-//!
+//! use tinyhttp::prelude::*;
 //! #[get("/")]
 //! fn get() -> &'static str {
 //!  "Hello, World!"
@@ -55,3 +52,9 @@
 
 pub use tinyhttp_codegen as codegen;
 pub use tinyhttp_internal as internal;
+
+pub mod prelude {
+    pub use tinyhttp_codegen::*;
+    pub use tinyhttp_internal::config::*;
+    pub use tinyhttp_internal::request::Request;
+}

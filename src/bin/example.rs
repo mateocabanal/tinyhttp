@@ -1,17 +1,15 @@
 use std::net::TcpListener;
 
-use tinyhttp::internal::config::*;
-use tinyhttp::internal::request::Request;
-use tinyhttp::codegen::*;
+use tinyhttp::prelude::*;
 
 #[get("/")]
-fn get() -> &'static str {
+fn get(_req: Request) -> &'static str {
     "Hello, there!\n"
 }
 
 #[post("/")]
-fn post(body: Request) -> Vec<u8> {
-    format!("Hello, {:?}\n", body.get_raw_body()).into()
+fn post(body: Request) -> String {
+    format!("Hello, {:?}\n", body.get_raw_body())
 }
 
 fn main() {
