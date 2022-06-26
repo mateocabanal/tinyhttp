@@ -28,7 +28,7 @@
 //! use std::net::TcpListener;
 //! use tinyhttp::prelude::*;
 //! #[get("/")]
-//! fn get() -> &'static str {
+//! fn get(_body: Request) -> &'static str {
 //!  "Hello, World!"
 //! }
 //!
@@ -36,8 +36,8 @@
 //! /// compatible with Into<Vec<u8>>. Must manually do it though.
 //!
 //! #[post("/")]
-//! fn post(body: Request) -> Vec<u8> {
-//!   "Hello, there!".into()
+//! fn post(body: Request) -> &'static str {
+//!   "Hello, there!"
 //! }
 //!
 //! fn main() {
