@@ -1,5 +1,6 @@
-# HTTP SERVER 
-![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg?branch=main) 
+# HTTP SERVER
+
+![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg?branch=main)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
 #### This repo contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
@@ -10,9 +11,8 @@ Speedy HTTP server built purely in Rust. Comes with built-in GZIP compression an
 
 Uses procedural macros for easy API building.
 
-
-
 Example 1:
+
 ```rust
 use std::net::TcpListener;
 use tinyhttp::internal::config::*;
@@ -28,11 +28,12 @@ fn main() {
 }
 
 #[get("/")]
-fn get() -> &'static str {
+fn get(_body: Request) -> &'static str {
   "Hello, World!"
 }
 
 #[post("/")]
-fn post(body: Request) -> Vec<u8> {
-  "Hi, there!".into()
+fn post(body: Request) -> &'static str {
+  "Hi, there!"
 }
+```
