@@ -15,8 +15,7 @@ Example 1:
 
 ```rust
 use std::net::TcpListener;
-use tinyhttp::internal::config::*;
-use tinyhttp::codegen::*;
+use tinyhttp::prelude::*;
 
 fn main() {
   let socket = TcpListener::bind(":::9001").unwrap();
