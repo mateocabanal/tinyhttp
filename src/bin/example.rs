@@ -15,7 +15,7 @@ fn post(body: Request) -> String {
 fn main() {
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![get(), post()]);
-    let config = Config::new().routes(routes);
+    let config = Config::new().routes(routes).gzip(true);
     let http = HttpListener::new(socket, config);
 
     http.start();
