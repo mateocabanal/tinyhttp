@@ -1,0 +1,19 @@
+[package]
+name = "tinyhttp-codegen"
+version = "0.2.5"
+authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
+edition = "2018"
+license = "GPL-2.0-or-later"
+keywords = ["http", "server"]
+description = "Provides codegen for tinyhttp"
+repository = "https://github.com/mateocabanal/tinyhttp-codegen"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.98", features = ["full"] }
+quote = "1.0.18"
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.5", default-features = false }

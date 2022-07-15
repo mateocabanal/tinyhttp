@@ -1,0 +1,39 @@
+[package]
+authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
+description = "Internal data types for tinyhttp"
+edition = "2021"
+keywords = ["http", "server"]
+license = "GPL-2.0-or-later"
+name = "tinyhttp-internal"
+repository = "https://github.com/mateocabanal/tinyhttp-internal"
+version = "0.2.6"
+
+[dependencies]
+mime_guess = "2.0.4"
+openssl = { version = "0.10.40", optional = true }
+brotli2 = { version = "0.3.2", optional = true }
+dyn-clone = "1.0.6"
+fancy-regex = "0.10.0"
+infer = "0.9.0"
+lazy_static = "1.4.0"
+simple_logger = { version = "2.1.0", optional = true }
+num_cpus = "1.13.1"
+async-std = { version = "1.12.0", features = ["attributes"], optional = true }
+futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
+
+[dependencies.flate2]
+features = ["miniz-sys"]
+version = "1.0.24"
+optional = true
+
+[dependencies.log]
+features = ["std"]
+version = "0.4.17"
+optional = true
+
+[features]
+default = ["sys", "log", "async"]
+async = ["dep:async-std", "dep:futures"]
+ssl = ["dep:openssl"]
+sys = ["ssl", "dep:flate2", "dep:brotli2"]
+log = ["dep:simple_logger", "dep:log"]
