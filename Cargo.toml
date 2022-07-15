@@ -1,10 +1,12 @@
 [workspace]
-exclude = ["rocket-bench"]
+exclude = [
+    "rocket-bench",
+    "demo-app",
+    "demo-server",
+    "demo-async",
+]
 members = [
     "tinyhttp",
     "tinyhttp-internal",
     "tinyhttp-codegen",
-    "demo-app",
-    "demo-server",
-    "demo-async",
 ]
