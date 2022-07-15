@@ -1,0 +1,11 @@
+{
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "[rust]": {
+    "editor.defaultFormatter": "matklad.rust-analyzer"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "cSpell.words": ["tinyhttp"]
+}
