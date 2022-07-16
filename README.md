@@ -3,11 +3,14 @@
 ![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg?branch=main)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
-#### This repo contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
+#### The "tinyhttp" crate contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
 
 Speedy HTTP server built purely in Rust. Comes with built-in GZIP compression and HTTPS support.
 
 Uses procedural macros for easy API building.
+
+tinyhttp also supports async, however it is disabled by default.
+Enable the "async" feature to enable async.
 
 Example 1:
 
