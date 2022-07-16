@@ -27,8 +27,8 @@ use async_std::{
 use crate::{
     config::{Config, HttpListener},
     request::{self, Request},
+    response::Response,
 };
-
 
 #[cfg(not(feature = "async"))]
 pub fn start_http(http: HttpListener) {
@@ -143,29 +143,131 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         "BODY (TOP): {:#?}",
         std::str::from_utf8(&buf[body_index + 4..]).unwrap()
     );
-    request::Request::new(
-        raw_body.to_vec(),
-        headers.clone(),
-        status_line.to_vec(),
-        None,
-    )
+    Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let buf = read_stream(conn);
-    let request = build_and_parse_req(buf);
-    let status_line = request.get_status_line().clone();
-    let mut res_headers: Vec<String> = Vec::new();
-
-    let (c_status_line, mut body, mime) = match status_line[0].as_str() {
-        "GET" => match config.get_routes(status_line[1].clone()) {
+fn build_res(req: Request) -> Response {
+    let response = Response::new();
+    match status_line[0].as_str() {
+        "GET" => match config.get_routes(status_line[1]) {
             Some(vec) => {
                 #[cfg(feature = "log")]
                 log::info!("Found path in routes!");
 
                 let line = "HTTP/1.1 200 OK\r\n";
 
-                let request_new = request.clone().set_wildcard(vec.2.clone());
+                request.set_wildcard(vec.2);
+
+                response
+                    .status_line(line)
+                    .body(vec.1(request))
+                    .mime("text/plain");
+            }
+
+            None => match config.get_mount() {
+                Some(old_path) => {
+                    let path = old_path.to_owned() + &status_line[1];
+                    if Path::new(&path).extension().is_none() && config.get_spa() {
+                        let body = read_to_vec(&(old_path.to_owned() + "/index.html")).unwrap();
+                        let line = "HTTP/1.1 200 OK\r\n";
+
+                        response.status_line(line).body(body).mime("text/html");
+                    } else if Path::new(&path.clone()).is_file() {
+                        let body = read_to_vec(path.clone()).unwrap();
+                        let line = "HTTP/1.1 200 OK\r\n";
+                        let mime = mime_guess::from_path(path.clone())
+                            .first_raw()
+                            .unwrap_or("text/plain");
+                        response.status_line(line).body(body).mime(mime);
+                    } else if Path::new(&path).is_dir() {
+                        if Path::new(&(path.to_owned() + "/index.html")).is_file() {
+                            let body = read_to_vec(path.to_owned() + "/index.html").unwrap();
+
+                            let lines = "HTTP/1.1 200 OK\r\n";
+                            response.status_line(line).body(body).mime("text/html");
+                        } else {
+                            response
+                                .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                                .body(b"<h1>404 Not Found</h1>".to_vec())
+                                .mime("text/html");
+                        }
+                    } else if Path::new(&(path.to_owned() + ".html")).is_file() {
+                        let body = read_to_vec(path.to_owned() + ".html").unwrap();
+                        let lines = "HTTP/1.1 200 OK\r\n";
+                        response.status_line(lines).body(body).mime("text/html");
+                    } else {
+                        response
+                            .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                            .body(b"<h1>404 Not Found</h1>".to_vec())
+                            .mime("text/html");
+                    }
+                }
+
+                None => {
+                    response
+                        .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                        .body(b"<h1>404 Not Found</h1>".to_vec())
+                        .mime("text/html");
+                }
+            },
+        },
+        "POST" => match config.post_routes() {
+            Some(vec) => {
+                #[cfg(feature = "log")]
+                log::info!("POST");
+
+                let stat_line = status_line.clone();
+                for c in vec.iter() {
+                    if c.0 == stat_line[1] {
+                        let line = "HTTP/1.1 200 OK\r\n";
+                        response
+                            .status_line(line)
+                            .body(c.1(request).mime("text/plain"));
+                    } else if stat_line[1].contains(&c.0) && c.2.is_some() {
+                        let line = "HTTP/1.1 200 OK\r\n";
+                        let split = stat_line[1].split(&c.0).last().unwrap();
+                        request.set_wildcard(Some(split.to_string()));
+                        response
+                            .status_line(line)
+                            .body(c.1(request).mime("text/plain"));
+                    }
+                }
+            }
+
+            None => {
+                response
+                    .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                    .body(b"<h1>404 Not Found</h1>".to_vec())
+                    .mime("text/html");
+            }
+        },
+
+        _ => {
+            response
+                .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                .body(b"<h1>404 Not Found</h1>".to_vec())
+                .mime("text/html");
+        }
+    };
+
+    response
+}
+
+fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
+    let buf = read_stream(conn);
+    let request = build_and_parse_req(buf);
+    let status_line = request.get_status_line();
+    let mut res_headers: Vec<String> = Vec::new();
+
+    let (c_status_line, mut body, mime) = match status_line[0].as_str() {
+        "GET" => match config.get_routes(status_line[1]) {
+            Some(vec) => {
+                #[cfg(feature = "log")]
+                log::info!("Found path in routes!");
+
+                let line = "HTTP/1.1 200 OK\r\n";
+
+                let request_new = request.clone().set_wildcard(vec.2);
 
                 (line, vec.1(request_new), "text/plain")
             }
