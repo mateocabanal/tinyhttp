@@ -1,13 +1,28 @@
-use std::{
-    net::{Incoming, TcpListener},
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use crate::{http::start_http, request::Request, thread_pool::ThreadPool};
+use crate::request::Request;
 pub use dyn_clone::DynClone;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+
+#[cfg(feature = "async")]
+use crate::async_http::start_http;
+
+#[cfg(feature = "async")]
+use async_std::{
+    net::{Incoming, TcpListener},
+    task::block_on,
+};
+
+#[cfg(feature = "async")]
+use futures::executor::{ThreadPool, ThreadPoolBuilder};
+
+#[cfg(not(feature = "async"))]
+use crate::{http::start_http, thread_pool::ThreadPool};
+
+#[cfg(not(feature = "async"))]
+use std::net::{Incoming, TcpListener};
 
 #[derive(Clone, Copy)]
 pub enum Method {
@@ -32,7 +47,7 @@ pub struct HttpListener {
 }
 
 impl HttpListener {
-    pub fn new(socket: TcpListener, config: Config) -> HttpListener {
+    pub fn new<P: Into<TcpListener>>(socket: P, config: Config) -> HttpListener {
         #[cfg(feature = "log")]
         log::debug!("Using {} threads", num_cpus::get());
 
@@ -43,18 +58,30 @@ impl HttpListener {
                 config.ssl_priv.clone().unwrap(),
             ));
             return HttpListener {
-                socket,
+                socket: socket.into(),
                 config,
+                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::new(num_cpus::get()),
+                #[cfg(feature = "async")]
+                pool: ThreadPoolBuilder::new()
+                    .pool_size(num_cpus::get())
+                    .create()
+                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt,
                 use_pool: true,
             };
         } else {
             return HttpListener {
-                socket,
+                socket: socket.into(),
                 config,
+                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::new(num_cpus::get()),
+                #[cfg(feature = "async")]
+                pool: ThreadPoolBuilder::new()
+                    .pool_size(num_cpus::get())
+                    .create()
+                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt: None,
                 use_pool: true,
@@ -63,7 +90,16 @@ impl HttpListener {
     }
 
     pub fn threads(mut self, threads: usize) -> Self {
-        self.pool = ThreadPool::new(threads);
+        #[cfg(not(feature = "async"))]
+        let pool = ThreadPool::new(threads);
+
+        #[cfg(feature = "async")]
+        let pool = ThreadPoolBuilder::new()
+            .pool_size(threads)
+            .create()
+            .unwrap();
+
+        self.pool = pool;
         self
     }
 
@@ -73,7 +109,11 @@ impl HttpListener {
     }
 
     pub fn start(self) {
-        start_http(self)
+        #[cfg(feature = "async")]
+        block_on(start_http(self));
+
+        #[cfg(not(feature = "async"))]
+        start_http(self);
     }
 
     pub fn get_stream(&self) -> Incoming<'_> {

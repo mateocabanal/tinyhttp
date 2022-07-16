@@ -8,57 +8,37 @@ use std::{
     vec,
 };
 
-#[cfg(not(feature = "async"))]
-use std::io::{Read, Write};
+use async_std::io::{Read, Write};
+use async_std::io::{ReadExt, WriteExt};
 
 #[cfg(feature = "sys")]
 use flate2::write::GzEncoder;
+#[cfg(feature = "sys")]
 use flate2::Compression;
-
-#[cfg(feature = "async")]
-use async_std::io::{Read, Write};
-
-#[cfg(feature = "async")]
-use async_std::{
-    io::{ReadExt, WriteExt},
-    task::spawn,
-};
+use futures::StreamExt;
 
 use crate::{
     config::{Config, HttpListener},
     request::{self, Request},
 };
 
+#[cfg(feature = "async")]
+pub async fn start_http(http: HttpListener) {
+    http.get_stream()
+        .for_each_concurrent(None, |tcp_stream| async {
+            let mut conn = tcp_stream.unwrap();
+            let config = http.config.clone();
 
-#[cfg(not(feature = "async"))]
-pub fn start_http(http: HttpListener) {
-    for stream in http.get_stream() {
-        let mut conn = stream.unwrap();
-        let config = http.config.clone();
+            #[cfg(feature = "log")]
+            log::trace!("CALLING spawn");
 
-        if config.ssl && cfg!(feature = "ssl") {
-            #[cfg(feature = "ssl")]
-            let acpt = http.ssl_acpt.clone().unwrap();
-            #[cfg(feature = "ssl")]
-            http.pool.execute(move || match acpt.accept(conn) {
-                Ok(mut s) => {
-                    parse_request(&mut s, config);
-                }
-                Err(s) => {
-                    #[cfg(feature = "log")]
-                    log::error!("{}", s);
-                }
+            http.pool.spawn_ok(async move {
+                parse_request(&mut conn, config).await;
             });
-        } else if http.use_pool {
-            http.pool.execute(move || {
-                parse_request(&mut conn, config);
-            });
-        } else {
-            parse_request(&mut conn, config);
-        }
 
-        //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
-    }
+            //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
+        })
+        .await;
 }
 
 fn build_and_parse_req(buf: Vec<u8>) -> Request {
@@ -151,8 +131,8 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     )
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let buf = read_stream(conn);
+async fn parse_request<P: Read + Write + std::marker::Unpin>(conn: &mut P, config: Config) {
+    let buf = read_stream(conn).await;
     let request = build_and_parse_req(buf);
     let status_line = request.get_status_line().clone();
     let mut res_headers: Vec<String> = Vec::new();
@@ -293,7 +273,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             let start: Instant = std::time::Instant::now();
 
             let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-            writer.write_all(&body).unwrap();
+            io::Write::write_all(&mut writer, &body).unwrap();
             body = writer.finish().unwrap();
             res_headers.push("Content-Encoding: gzip\r\n".to_string());
             #[cfg(feature = "log")]
@@ -304,7 +284,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             let br_body = body.clone();
             let start = std::time::Instant::now();
             let mut compressor = brotli2::read::BrotliEncoder::new(&*br_body, 9);
-            compressor.read_to_end(&mut body).unwrap();
+            io::Read::read_to_end(&mut compressor, &mut body).unwrap();
             #[cfg(feature = "log")]
             log::info!("{:?}", body);
             res_headers.push("Content-Encoding: br\r\n".to_string());
@@ -327,7 +307,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     );
 
     let res = [headers.as_bytes(), &body[..]].concat();
-    match conn.write_all(&res) {
+    match conn.write_all(&res).await {
         Ok(_) => {
             #[cfg(feature = "log")]
             log::debug!("WROTE response");
@@ -340,41 +320,12 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     }
 }
 
-/*pub fn get_header(vec: Vec<String>, header: String) -> Result<Vec<String>, String> {
-    let found = match vec.iter().position(|s| s.starts_with(&header)) {
-        Some(pos) => pos,
-        None => return Err("NOT FOUND".to_string()),
-    };
-    let res = HEAD
-        .find(&vec[found])
-        .unwrap()
-        .unwrap()
-        .as_str()
-        .to_string();
-    let res: Vec<String> = res
-        .split(",")
-        .map(|c| c.to_string().split_whitespace().collect())
-        .collect();
-    Ok(res)
-}*/
-
-pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    fn inner(path: &Path) -> io::Result<Vec<u8>> {
-        let file = File::open(path).unwrap();
-        let mut content: Vec<u8> = Vec::new();
-        let mut reader = BufReader::new(file);
-        reader.read_to_end(&mut content).unwrap();
-        Ok(content)
-    }
-    inner(path.as_ref())
-}
-
-fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
+async fn read_stream<P: Read + std::marker::Unpin>(stream: &mut P) -> Vec<u8> {
     let buffer_size = 512;
     let mut request_buffer = vec![];
     loop {
         let mut buffer = vec![0; buffer_size];
-        match stream.read(&mut buffer) {
+        match stream.read(&mut buffer).await {
             Ok(n) => {
                 if n == 0 {
                     break;
@@ -392,4 +343,15 @@ fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
     }
 
     request_buffer
+}
+
+pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
+    fn inner(path: &Path) -> io::Result<Vec<u8>> {
+        let file = File::open(path).unwrap();
+        let mut content: Vec<u8> = Vec::new();
+        let mut reader = BufReader::new(file);
+        io::Read::read_to_end(&mut reader, &mut content).unwrap();
+        Ok(content)
+    }
+    inner(path.as_ref())
 }
