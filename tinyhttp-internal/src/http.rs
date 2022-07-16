@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, BufReader, Read, Write},
+    io::{self, BufReader},
     iter::FromIterator,
     path::Path,
     rc::Rc,
@@ -8,16 +8,29 @@ use std::{
     vec,
 };
 
+#[cfg(not(feature = "async"))]
+use std::io::{Read, Write};
+
 #[cfg(feature = "sys")]
 use flate2::write::GzEncoder;
-#[cfg(feature = "sys")]
 use flate2::Compression;
+
+#[cfg(feature = "async")]
+    use async_std::io::{Read, Write};
+
+#[cfg(feature = "async")]
+use async_std::{
+
+    io::{ReadExt, WriteExt},
+    task::spawn,
+};
 
 use crate::{
     config::{Config, HttpListener},
     request::{self, Request},
 };
 
+#[cfg(not(feature = "async"))]
 pub fn start_http(http: HttpListener) {
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();

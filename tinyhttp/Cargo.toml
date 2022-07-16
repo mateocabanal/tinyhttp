@@ -16,7 +16,7 @@ reqwest = { version = "*", features = ["blocking"] }
 log = "*"
 
 [[bench]]
-name = "parse_html_req"
+name = "create_req"
 harness = false
 
 [dependencies]
