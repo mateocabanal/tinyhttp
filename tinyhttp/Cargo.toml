@@ -10,6 +10,13 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dev-dependencies]
+criterion = "0.3"
+reqwest = { version = "*", features = ["blocking"] }
+
+[[bench]]
+name = "parse_html_req"
+harness = false
 
 [dependencies]
 tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.6", default-features = false }
