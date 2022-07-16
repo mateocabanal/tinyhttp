@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 #[derive(Clone)]
-struct Response<'a> {
+pub(crate) struct Response<'a> {
     headers: Option<HashMap<String, String>>,
     status_line: Option<Vec<String>>,
     body: Option<Vec<u8>>,

@@ -259,7 +259,9 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let status_line = request.get_status_line();
     let mut res_headers: Vec<String> = Vec::new();
 
-    let (c_status_line, mut body, mime) = match status_line[0].as_str() {
+    let response = build_res(request);
+
+    /*let (c_status_line, mut body, mime) = match status_line[0].as_str() {
         "GET" => match config.get_routes(status_line[1]) {
             Some(vec) => {
                 #[cfg(feature = "log")]
@@ -353,7 +355,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             b"<h1>404 Not Found</h1>".to_vec(),
             "text/html",
         ),
-    };
+    };*/
 
     let inferred_mime = match infer::get(&body) {
         Some(mime) => mime.mime_type(),
