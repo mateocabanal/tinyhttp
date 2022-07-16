@@ -23,5 +23,3 @@ jobs:
       run: git clone https://github.com/mateocabanal/tinyhttp-internal ../tinyhttp-internal
     - name: Build
       run: cargo build --verbose --release
-    - name: Run tests
-      run: cargo test --verbose
