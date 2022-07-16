@@ -8,24 +8,15 @@ use std::{
     vec,
 };
 
-use fancy_regex::Regex;
 #[cfg(feature = "sys")]
 use flate2::write::GzEncoder;
 #[cfg(feature = "sys")]
 use flate2::Compression;
-use lazy_static::lazy_static;
 
 use crate::{
     config::{Config, HttpListener},
     request::{self, Request},
 };
-
-/*lazy_static! {
-    static ref GET: Regex = Regex::new(r"(?<=GET ).\S*").unwrap();
-    static ref POST: Regex = Regex::new(r"(?<=POST ).\S*").unwrap();
-    static ref HEAD: Regex = Regex::new(r"(?<=: ).*").unwrap();
-    static ref MIME: Regex = Regex::new(r"(?<!\.)\.\S*").unwrap();
-}*/
 
 pub fn start_http(http: HttpListener) {
     for stream in http.get_stream() {
@@ -126,7 +117,6 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
     #[cfg(feature = "log")]
     log::debug!("{:#?}", status_line);
-    let method = &status_line[0];
     let body_index = buf
         .windows(4)
         .enumerate()
