@@ -12,8 +12,7 @@ Uses procedural macros for easy API building.
 tinyhttp also supports async, however it is disabled by default.
 Enable the "async" feature to enable async.
 
-Example 1:
-
+Blocking Example :
 ```rust
 use std::net::TcpListener;
 use tinyhttp::prelude::*;
@@ -37,3 +36,29 @@ fn post(body: Request) -> &'static str {
   "Hi, there!"
 }
 ```
+
+Async Example:
+```rust
+use std::net::TcpListener;
+use tinyhttp::prelude::*;
+
+// Can replace tokio with any other async executor
+#[tokio::main]
+async fn main() {
+  let socket = TcpListener::bind(":::9001").unwrap();
+  let routes = Routes::new(vec![get(), post()]);
+  let config = Config::new().routes(routes);
+  let http = HttpListener::new(socket, config);
+
+  http.start().await;
+}
+
+#[get("/")]
+fn get(_body: Request) -> &'static str {
+  "Hello, World!"
+}
+
+#[post("/")]
+fn post(body: Request) -> &'static str {
+  "Hi, there!"
+}
