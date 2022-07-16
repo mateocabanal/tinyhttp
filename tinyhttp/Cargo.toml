@@ -17,6 +17,7 @@ tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.2.5" }
 
 [features]
 default = ["ssl", "sys", "log"]
+openssl_vendor = ["tinyhttp-internal/openssl_vendor"]
 ssl = ["tinyhttp-internal/ssl"]
 sys = ["tinyhttp-internal/sys"]
 log = ["tinyhttp-internal/log"]
