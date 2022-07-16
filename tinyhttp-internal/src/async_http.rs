@@ -10,6 +10,7 @@ use std::{
 
 use async_std::io::{Read, Write};
 use async_std::io::{ReadExt, WriteExt};
+use async_std::task::spawn;
 
 #[cfg(feature = "sys")]
 use flate2::write::GzEncoder;
@@ -32,7 +33,7 @@ pub async fn start_http(http: HttpListener) {
             #[cfg(feature = "log")]
             log::trace!("CALLING spawn");
 
-            http.pool.spawn_ok(async move {
+            spawn(async move {
                 parse_request(&mut conn, config).await;
             });
 

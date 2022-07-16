@@ -32,7 +32,7 @@ version = "0.4.17"
 optional = true
 
 [features]
-default = ["sys", "log", "async"]
+default = ["sys", "log"]
 openssl_vendor = ["ssl", "openssl?/vendored"]
 async = ["dep:async-std", "dep:futures"]
 ssl = ["dep:openssl"]

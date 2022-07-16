@@ -12,8 +12,7 @@ use std::{
 use std::io::{Read, Write};
 
 #[cfg(feature = "sys")]
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use flate2::{write::GzEncoder, Compression};
 
 #[cfg(feature = "async")]
 use async_std::io::{Read, Write};

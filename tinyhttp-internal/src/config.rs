@@ -12,7 +12,6 @@ use crate::async_http::start_http;
 #[cfg(feature = "async")]
 use async_std::{
     net::{Incoming, TcpListener},
-    task::block_on,
 };
 
 #[cfg(feature = "async")]
@@ -108,12 +107,14 @@ impl HttpListener {
         self
     }
 
+    #[cfg(not(feature = "async"))]
     pub fn start(self) {
-        #[cfg(feature = "async")]
-        block_on(start_http(self));
-
-        #[cfg(not(feature = "async"))]
         start_http(self);
+    }
+
+    #[cfg(feature = "async")]
+    pub async fn start_async(self) {
+        start_http(self).await;
     }
 
     pub fn get_stream(&self) -> Incoming<'_> {
@@ -179,6 +180,7 @@ impl Config {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Warn)
             .env()
+            .with_local_timestamps()
             .init()
             .unwrap();
 
