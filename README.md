@@ -1,6 +1,6 @@
 # HTTP SERVER
 
-![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg?branch=main)
+[![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg)](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
 #### The "tinyhttp" crate contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
