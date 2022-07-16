@@ -67,6 +67,8 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let status_line_index = if status_line_index_opt.is_some() {
         status_line_index_opt.unwrap()
     } else {
+
+        #[cfg(feature = "log")]
         log::info!("failed parsing status line!");
 
         0usize
