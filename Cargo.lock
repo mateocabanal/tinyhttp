@@ -1420,6 +1420,7 @@ name = "tinyhttp"
 version = "0.2.7"
 dependencies = [
  "criterion",
+ "log",
  "reqwest",
  "tinyhttp-codegen",
  "tinyhttp-internal",

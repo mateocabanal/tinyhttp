@@ -13,6 +13,7 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 [dev-dependencies]
 criterion = "0.3"
 reqwest = { version = "*", features = ["blocking"] }
+log = "*"
 
 [[bench]]
 name = "parse_html_req"

@@ -1,63 +1,117 @@
-use std::{
-    fs::File,
-    io::{self, BufReader, Read, Write},
-    iter::FromIterator,
-    path::Path,
-    rc::Rc,
-    time::Instant,
-    vec,
-};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use tinyhttp::prelude::*;
+use tinyhttp_internal::http::read_to_vec;
 
-use fancy_regex::Regex;
-#[cfg(feature = "sys")]
-use flate2::write::GzEncoder;
-#[cfg(feature = "sys")]
-use flate2::Compression;
-use lazy_static::lazy_static;
+use std::{collections::HashMap, path::Path, rc::Rc};
 
-use crate::{
-    config::{Config, HttpListener},
-    request::{self, Request},
-};
+/// Struct containing data on a single request.
+///
+/// parsed_body which is a Option<String> that can contain the body as a String
+///
+/// body is used when the body of the request is not a String
 
-/*lazy_static! {
-    static ref GET: Regex = Regex::new(r"(?<=GET ).\S*").unwrap();
-    static ref POST: Regex = Regex::new(r"(?<=POST ).\S*").unwrap();
-    static ref HEAD: Regex = Regex::new(r"(?<=: ).*").unwrap();
-    static ref MIME: Regex = Regex::new(r"(?<!\.)\.\S*").unwrap();
-}*/
+type Request = Request;
 
-pub fn start_http(http: HttpListener) {
-    for stream in http.get_stream() {
-        let mut conn = stream.unwrap();
-        let config = http.config.clone();
+#[derive(Clone)]
+pub struct Request {
+    parsed_body: Option<String>,
+    headers: HashMap<String, String>,
+    status_line: Vec<String>,
+    body: Vec<u8>,
+    wildcard: Option<String>,
+}
 
-        if config.ssl && cfg!(feature = "ssl") {
-            #[cfg(feature = "ssl")]
-            let acpt = http.ssl_acpt.clone().unwrap();
-            #[cfg(feature = "ssl")]
-            http.pool.execute(move || match acpt.accept(conn) {
-                Ok(mut s) => {
-                    parse_request(&mut s, config);
-                }
-                Err(s) => {
-                    #[cfg(feature = "log")]
-                    log::error!("{}", s);
-                }
-            });
-        } else if http.use_pool {
-            http.pool.execute(move || {
-                parse_request(&mut conn, config);
-            });
-        } else {
-            parse_request(&mut conn, config);
+#[derive(Clone, Debug)]
+pub enum BodyType {
+    ASCII(String),
+    Bytes(Vec<u8>),
+}
+
+impl Request {
+    pub(crate) fn new(
+        raw_body: Vec<u8>,
+        raw_headers: Vec<String>,
+        status_line: Vec<String>,
+        wildcard: Option<String>,
+    ) -> Request {
+        let raw_body_clone = raw_body.clone();
+        let ascii_body = match std::str::from_utf8(&raw_body_clone) {
+            Ok(s) => Some(s),
+            Err(_) => {
+                #[cfg(feature = "log")]
+                log::info!("Not an ASCII body");
+                None
+            }
+        };
+
+        let mut headers: HashMap<String, String> = HashMap::new();
+        #[cfg(feature = "log")]
+        log::trace!("Headers: {:#?}", raw_headers);
+        for i in raw_headers.iter() {
+            let mut iter = i.split(": ");
+            let key = iter.next().unwrap();
+            let value = iter.next().unwrap();
+
+            /*            match value {
+                            Some(v) => println!("{}", v),
+                            None => {
+                                break;
+                            }
+                        };
+            */
+            headers.insert(key.to_string(), value.to_string());
         }
 
-        //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
+        #[cfg(feature = "log")]
+        log::info!("Request headers: {:?}", headers);
+
+        if ascii_body.is_none() {
+            Request {
+                parsed_body: None,
+                body: raw_body,
+                headers,
+                status_line,
+                wildcard,
+            }
+        } else {
+            Request {
+                body: raw_body,
+                parsed_body: Some(ascii_body.unwrap().to_string()),
+                headers,
+                status_line,
+                wildcard,
+            }
+        }
+    }
+
+    pub(crate) fn set_wildcard(mut self, w: Option<String>) -> Self {
+        self.wildcard = w;
+        self
+    }
+
+    pub fn get_raw_body(&self) -> Vec<u8> {
+        self.body.clone()
+    }
+
+    pub fn get_parsed_body(&self) -> Option<String> {
+        self.parsed_body.clone()
+    }
+
+    pub fn get_headers(&self) -> HashMap<String, String> {
+        self.headers.clone()
+    }
+
+    pub fn get_status_line(&self) -> Vec<String> {
+        self.status_line.clone()
+    }
+
+    pub fn get_wildcard(&self) -> Option<String> {
+        self.wildcard.clone()
     }
 }
 
-fn build_and_parse_req(buf: Vec<u8>) -> Request {
+fn parse_request(body: Vec<u8>, config: Config) {
+    let buf = body;
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -140,22 +194,16 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         "BODY (TOP): {:#?}",
         std::str::from_utf8(&buf[body_index + 4..]).unwrap()
     );
-    request::Request::new(
+    let mut res_headers: Vec<String> = Vec::new();
+    let request = Request::new(
         raw_body.to_vec(),
         headers.clone(),
         status_line.to_vec(),
         None,
-    )
-}
+    );
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let buf = read_stream(conn);
-    let request = build_and_parse_req(buf);
-    let status_line = request.get_status_line().clone();
-    let mut res_headers: Vec<String> = Vec::new();
-
-    let (c_status_line, mut body, mime) = match status_line[0].as_str() {
-        "GET" => match config.get_routes(status_line[1].clone()) {
+    let (c_status_line, mut body, mime) = match method.as_str() {
+        "GET" => match config.get_routes(status_line[1].to_string()) {
             Some(vec) => {
                 #[cfg(feature = "log")]
                 log::info!("Found path in routes!");
@@ -324,69 +372,4 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     );
 
     let res = [headers.as_bytes(), &body[..]].concat();
-    match conn.write_all(&res) {
-        Ok(_) => {
-            #[cfg(feature = "log")]
-            log::debug!("WROTE response");
-        }
-
-        Err(_) => {
-            #[cfg(feature = "log")]
-            log::warn!("ERROR on response!")
-        }
-    }
-}
-
-/*pub fn get_header(vec: Vec<String>, header: String) -> Result<Vec<String>, String> {
-    let found = match vec.iter().position(|s| s.starts_with(&header)) {
-        Some(pos) => pos,
-        None => return Err("NOT FOUND".to_string()),
-    };
-    let res = HEAD
-        .find(&vec[found])
-        .unwrap()
-        .unwrap()
-        .as_str()
-        .to_string();
-    let res: Vec<String> = res
-        .split(",")
-        .map(|c| c.to_string().split_whitespace().collect())
-        .collect();
-    Ok(res)
-}*/
-
-pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    fn inner(path: &Path) -> io::Result<Vec<u8>> {
-        let file = File::open(path).unwrap();
-        let mut content: Vec<u8> = Vec::new();
-        let mut reader = BufReader::new(file);
-        reader.read_to_end(&mut content).unwrap();
-        Ok(content)
-    }
-    inner(path.as_ref())
-}
-
-fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 512;
-    let mut request_buffer = vec![];
-    loop {
-        let mut buffer = vec![0; buffer_size];
-        match stream.read(&mut buffer) {
-            Ok(n) => {
-                if n == 0 {
-                    break;
-                } else {
-                    if n < buffer_size {
-                        request_buffer.append(&mut buffer[..n].to_vec());
-                        break;
-                    } else {
-                        request_buffer.append(&mut buffer);
-                    }
-                }
-            }
-            Err(_) => println!("Error: Could not read string!"),
-        }
-    }
-
-    request_buffer
 }

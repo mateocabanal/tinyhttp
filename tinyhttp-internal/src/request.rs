@@ -5,6 +5,8 @@ use std::collections::HashMap;
 /// parsed_body which is a Option<String> that can contain the body as a String
 ///
 /// body is used when the body of the request is not a String
+
+#[derive(Clone)]
 pub struct Request {
     parsed_body: Option<String>,
     headers: HashMap<String, String>,
@@ -74,6 +76,11 @@ impl Request {
                 wildcard,
             }
         }
+    }
+
+    pub(crate) fn set_wildcard(mut self, w: Option<String>) -> Self {
+        self.wildcard = w;
+        self
     }
 
     pub fn get_raw_body(&self) -> Vec<u8> {
