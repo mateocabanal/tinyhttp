@@ -17,9 +17,5 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Fetch tinyhttp-codegen
-      run: git clone https://github.com/mateocabanal/tinyhttp-codegen ../tinyhttp-codegen
-    - name: Fetch tinyhttp-internal
-      run: git clone https://github.com/mateocabanal/tinyhttp-internal ../tinyhttp-internal
     - name: Build
       run: cargo build --verbose --release
