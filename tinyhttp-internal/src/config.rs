@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, io::BufRead, sync::Arc};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
@@ -303,8 +303,17 @@ impl Config {
     /// ```ignore
     /// let config = Config::new().headers(vec!["Access-Control-Allow-Origin: *".into()]);
     /// ```
-    pub fn headers<P: Into<HashMap<String, String>>>(mut self, headers: P) -> Self {
-        self.headers = Some(headers.into());
+    pub fn headers(mut self, headers: Vec<String>) -> Self {
+        let mut hash_map: HashMap<String, String> = HashMap::new();
+        for i in headers {
+            let mut split = i.split_inclusive(": ");
+            hash_map.insert(
+                split.next().unwrap().to_string(),
+                split.next().unwrap().to_string() + "\r\n",
+            );
+        }
+
+        self.headers = Some(hash_map);
         self
     }
 
