@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
@@ -10,9 +10,7 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use crate::async_http::start_http;
 
 #[cfg(feature = "async")]
-use async_std::{
-    net::{Incoming, TcpListener},
-};
+use async_std::net::{Incoming, TcpListener};
 
 #[cfg(feature = "async")]
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
@@ -146,7 +144,7 @@ pub struct Config {
     pub ssl: bool,
     ssl_chain: Option<String>,
     ssl_priv: Option<String>,
-    headers: Option<Vec<String>>,
+    headers: Option<HashMap<String, String>>,
     br: bool,
     gzip: bool,
     spa: bool,
@@ -180,7 +178,6 @@ impl Config {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Warn)
             .env()
-            .with_local_timestamps()
             .init()
             .unwrap();
 
@@ -306,7 +303,7 @@ impl Config {
     /// ```ignore
     /// let config = Config::new().headers(vec!["Access-Control-Allow-Origin: *".into()]);
     /// ```
-    pub fn headers<P: Into<Vec<String>>>(mut self, headers: P) -> Self {
+    pub fn headers<P: Into<HashMap<String, String>>>(mut self, headers: P) -> Self {
         self.headers = Some(headers.into());
         self
     }
@@ -328,11 +325,8 @@ impl Config {
         self.gzip = res;
         self
     }
-    pub fn get_headers(&self) -> Option<Vec<String>> {
-        match self.headers.clone() {
-            Some(vec) => Some(vec),
-            None => None,
-        }
+    pub fn get_headers(&self) -> Option<HashMap<String, String>> {
+        self.headers.clone()
     }
     pub fn get_br(&self) -> bool {
         self.br

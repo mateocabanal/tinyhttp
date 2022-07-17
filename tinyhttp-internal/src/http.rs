@@ -1,4 +1,6 @@
 use std::{
+    borrow::Borrow,
+    cell::RefCell,
     fs::File,
     io::{self, BufReader},
     iter::FromIterator,
@@ -145,21 +147,20 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
-fn build_res(req: Request) -> Response {
-    let response = Response::new();
+fn build_res(req: Request, config: Config) -> Response {
+    let mut response = Response::new();
+    let status_line = req.get_status_line();
     match status_line[0].as_str() {
-        "GET" => match config.get_routes(status_line[1]) {
+        "GET" => match config.get_routes(status_line[1].clone()) {
             Some(vec) => {
                 #[cfg(feature = "log")]
                 log::info!("Found path in routes!");
 
-                let line = "HTTP/1.1 200 OK\r\n";
+                let req_new = req.clone().set_wildcard(vec.2);
 
-                request.set_wildcard(vec.2);
-
-                response
-                    .status_line(line)
-                    .body(vec.1(request))
+                response = Response::new()
+                    .status_line("HTTP/1.1 200 OK\r\n")
+                    .body(vec.1(req_new))
                     .mime("text/plain");
             }
 
@@ -170,32 +171,41 @@ fn build_res(req: Request) -> Response {
                         let body = read_to_vec(&(old_path.to_owned() + "/index.html")).unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
 
-                        response.status_line(line).body(body).mime("text/html");
+                        response = Response::new()
+                            .status_line(line)
+                            .body(body)
+                            .mime("text/html");
                     } else if Path::new(&path.clone()).is_file() {
                         let body = read_to_vec(path.clone()).unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
                         let mime = mime_guess::from_path(path.clone())
                             .first_raw()
                             .unwrap_or("text/plain");
-                        response.status_line(line).body(body).mime(mime);
+                        response = Response::new().status_line(line).body(body).mime(mime);
                     } else if Path::new(&path).is_dir() {
                         if Path::new(&(path.to_owned() + "/index.html")).is_file() {
                             let body = read_to_vec(path.to_owned() + "/index.html").unwrap();
 
-                            let lines = "HTTP/1.1 200 OK\r\n";
-                            response.status_line(line).body(body).mime("text/html");
+                            let line = "HTTP/1.1 200 OK\r\n";
+                            response = Response::new()
+                                .status_line(line)
+                                .body(body)
+                                .mime("text/html");
                         } else {
-                            response
-                                .status_line("HTTP/1.1 404 NOT FOUND\r\n")
+                            response = Response::new()
+                                .status_line("HTTP/1.1 200 OK\r\n")
                                 .body(b"<h1>404 Not Found</h1>".to_vec())
                                 .mime("text/html");
                         }
                     } else if Path::new(&(path.to_owned() + ".html")).is_file() {
                         let body = read_to_vec(path.to_owned() + ".html").unwrap();
-                        let lines = "HTTP/1.1 200 OK\r\n";
-                        response.status_line(lines).body(body).mime("text/html");
+                        let line = "HTTP/1.1 200 OK\r\n";
+                        response = Response::new()
+                            .status_line(line)
+                            .body(body)
+                            .mime("text/html");
                     } else {
-                        response
+                        response = Response::new()
                             .status_line("HTTP/1.1 404 NOT FOUND\r\n")
                             .body(b"<h1>404 Not Found</h1>".to_vec())
                             .mime("text/html");
@@ -203,7 +213,7 @@ fn build_res(req: Request) -> Response {
                 }
 
                 None => {
-                    response
+                    response = Response::new()
                         .status_line("HTTP/1.1 404 NOT FOUND\r\n")
                         .body(b"<h1>404 Not Found</h1>".to_vec())
                         .mime("text/html");
@@ -219,22 +229,26 @@ fn build_res(req: Request) -> Response {
                 for c in vec.iter() {
                     if c.0 == stat_line[1] {
                         let line = "HTTP/1.1 200 OK\r\n";
-                        response
+                        let req_new = req.clone();
+                        response = response
+                            .clone()
                             .status_line(line)
-                            .body(c.1(request).mime("text/plain"));
+                            .body(c.1(req_new))
+                            .mime("text/plain");
                     } else if stat_line[1].contains(&c.0) && c.2.is_some() {
                         let line = "HTTP/1.1 200 OK\r\n";
                         let split = stat_line[1].split(&c.0).last().unwrap();
-                        request.set_wildcard(Some(split.to_string()));
-                        response
+                        let req_new = req.clone().set_wildcard(Some(split.to_string()));
+                        response = response
                             .status_line(line)
-                            .body(c.1(request).mime("text/plain"));
+                            .body(c.1(req_new))
+                            .mime("text/plain");
                     }
                 }
             }
 
             None => {
-                response
+                response = Response::new()
                     .status_line("HTTP/1.1 404 NOT FOUND\r\n")
                     .body(b"<h1>404 Not Found</h1>".to_vec())
                     .mime("text/html");
@@ -242,7 +256,7 @@ fn build_res(req: Request) -> Response {
         },
 
         _ => {
-            response
+            response = Response::new()
                 .status_line("HTTP/1.1 404 NOT FOUND\r\n")
                 .body(b"<h1>404 Not Found</h1>".to_vec())
                 .mime("text/html");
@@ -255,124 +269,36 @@ fn build_res(req: Request) -> Response {
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let buf = read_stream(conn);
     let request = build_and_parse_req(buf);
-    let status_line = request.get_status_line();
-    let mut res_headers: Vec<String> = Vec::new();
 
-    let response = build_res(request);
+    let response = Rc::new(RefCell::new(build_res(request.clone(), config.clone())));
+    let mime = response.borrow_mut().mime.clone().unwrap();
 
-    /*let (c_status_line, mut body, mime) = match status_line[0].as_str() {
-        "GET" => match config.get_routes(status_line[1]) {
-            Some(vec) => {
-                #[cfg(feature = "log")]
-                log::info!("Found path in routes!");
-
-                let line = "HTTP/1.1 200 OK\r\n";
-
-                let request_new = request.clone().set_wildcard(vec.2);
-
-                (line, vec.1(request_new), "text/plain")
-            }
-
-            None => match config.get_mount() {
-                Some(old_path) => {
-                    let path = old_path.to_owned() + &status_line[1];
-                    if Path::new(&path).extension().is_none() && config.get_spa() {
-                        let body = read_to_vec(&(old_path.to_owned() + "/index.html")).unwrap();
-                        let line = "HTTP/1.1 200 OK\r\n";
-
-                        (line, body, "text/html")
-                    } else if Path::new(&path.clone()).is_file() {
-                        let body = read_to_vec(path.clone()).unwrap();
-                        let line = "HTTP/1.1 200 OK\r\n";
-                        let mime = mime_guess::from_path(path.clone())
-                            .first_raw()
-                            .unwrap_or("text/plain");
-                        (line, body, mime)
-                    } else if Path::new(&path).is_dir() {
-                        if Path::new(&(path.to_owned() + "/index.html")).is_file() {
-                            let body = read_to_vec(path.to_owned() + "/index.html").unwrap();
-
-                            let lines = "HTTP/1.1 200 OK\r\n";
-                            (lines, body, "text/html")
-                        } else {
-                            (
-                                "HTTP/1.1 404 NOT FOUND\r\n",
-                                b"<h1>404 Not Found</h1>".to_vec(),
-                                "text/html",
-                            )
-                        }
-                    } else if Path::new(&(path.to_owned() + ".html")).is_file() {
-                        let body = read_to_vec(path.to_owned() + ".html").unwrap();
-                        let lines = "HTTP/1.1 200 OK\r\n";
-                        (lines, body, "text/html")
-                    } else {
-                        (
-                            "HTTP/1.1 404 NOT FOUND\r\n",
-                            b"<h1>404 Not Found</h1>".to_vec(),
-                            "text/html",
-                        )
-                    }
-                }
-
-                None => (
-                    "HTTP/1.1 404 NOT FOUND\r\n",
-                    b"<h1>404 Not Found</h1>".to_vec(),
-                    "text/html",
-                ),
-            },
-        },
-        "POST" => match config.post_routes() {
-            Some(vec) => {
-                #[cfg(feature = "log")]
-                log::info!("POST");
-
-                let mut res = ("", vec![], "");
-                let stat_line = status_line.clone();
-                for c in vec.iter() {
-                    if c.0 == stat_line[1] {
-                        let line = "HTTP/1.1 200 OK\r\n";
-                        res = (line, c.1(request.clone()), "text/plain");
-                    } else if stat_line[1].contains(&c.0) && c.2.is_some() {
-                        let line = "HTTP/1.1 200 OK\r\n";
-                        let split = stat_line[1].split(&c.0).last().unwrap();
-                        let request_new = request.clone().set_wildcard(Some(split.to_string()));
-                        res = (line, c.1(request_new), "text/plain");
-                    }
-                }
-                res
-            }
-
-            None => (
-                "HTTP/1.1 404 NOT FOUND\r\n",
-                b"<h1>404 Not Found</h1>".to_vec(),
-                "text/html",
-            ),
-        },
-
-        _ => (
-            "HTTP/1.1 404 NOT FOUND\r\n",
-            b"<h1>404 Not Found</h1>".to_vec(),
-            "text/html",
-        ),
-    };*/
-
-    let inferred_mime = match infer::get(&body) {
-        Some(mime) => mime.mime_type(),
-        None => mime,
+    let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
+        Some(mime) => mime.mime_type().to_string(),
+        None => mime.to_string(),
     };
 
-    res_headers.push(c_status_line.to_string());
     match config.get_headers() {
         Some(vec) => {
-            for i in vec {
-                res_headers.push(format!("{}\r\n", i));
+            for (i, j) in vec.iter() {
+                response
+                    .borrow_mut()
+                    .headers
+                    .insert(i.to_string(), j.to_string());
             }
         }
         None => (),
     }
-    res_headers.push(format!("Content-Type: {}\r\n", inferred_mime));
 
-    res_headers.push("X-:)-->: HEHEHE\r\n".to_string());
+    response.borrow_mut().headers.insert(
+        "Content-Type: ".to_string(),
+        inferred_mime.to_owned() + "\r\n",
+    );
+
+    response
+        .borrow_mut()
+        .headers
+        .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
 
     let req_headers = request.clone().get_headers();
 
@@ -394,42 +320,32 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             #[cfg(feature = "log")]
             log::info!("GZIP ENABLED!");
             let start: Instant = std::time::Instant::now();
-
+            let body = response.borrow_mut().clone();
             let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-            writer.write_all(&body).unwrap();
-            body = writer.finish().unwrap();
-            res_headers.push("Content-Encoding: gzip\r\n".to_string());
-            #[cfg(feature = "log")]
-            log::info!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
-        } else if config.get_br() && comp.contains(&"br".to_string()) {
-            #[cfg(feature = "log")]
-            log::info!("BROTLI ENABLED!");
-            let br_body = body.clone();
-            let start = std::time::Instant::now();
-            let mut compressor = brotli2::read::BrotliEncoder::new(&*br_body, 9);
-            compressor.read_to_end(&mut body).unwrap();
-            #[cfg(feature = "log")]
-            log::info!("{:?}", body);
-            res_headers.push("Content-Encoding: br\r\n".to_string());
+            writer.write_all(&body.body.as_ref().unwrap()).unwrap();
+            body.body(writer.finish().unwrap());
+            response
+                .borrow_mut()
+                .headers
+                .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
             #[cfg(feature = "log")]
             log::info!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
         }
     }
 
-    let mut headers: String = String::new();
-    for i in res_headers {
-        headers += &(i.as_str().to_owned());
-    }
-    headers += "\r\n";
-
     #[cfg(feature = "log")]
-    log::debug!(
-        "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-        body,
-        headers
-    );
+    {
+        let brw = response.borrow_mut();
+        log::debug!(
+            "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
+            brw.body.as_ref().unwrap(),
+            brw.headers,
+        );
+    }
 
-    let res = [headers.as_bytes(), &body[..]].concat();
+    response.borrow_mut().send(conn);
+
+    /*let res = [headers.as_bytes(), &body[..]].concat();
     match conn.write_all(&res) {
         Ok(_) => {
             #[cfg(feature = "log")]
@@ -440,7 +356,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             #[cfg(feature = "log")]
             log::warn!("ERROR on response!")
         }
-    }
+    }*/
 }
 
 /*pub fn get_header(vec: Vec<String>, header: String) -> Result<Vec<String>, String> {
