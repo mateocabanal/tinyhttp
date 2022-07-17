@@ -21,6 +21,7 @@ impl Response {
         }
     }
 
+    #[allow(dead_code)]
     pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
         self.headers = headers;
         self
@@ -45,7 +46,7 @@ impl Response {
     }
 
     pub fn send<P: Read + Write>(&self, sock: &mut P) {
-        let mut line_bytes = self.status_line.as_bytes().to_vec();
+        let line_bytes = self.status_line.as_bytes().to_vec();
         #[cfg(feature = "log")]
         log::debug!("res status line: {:#?}", self.status_line);
 
@@ -77,6 +78,6 @@ impl Response {
             }
         }
 
-        sock.write_all(&full_req);
+        sock.write_all(&full_req).unwrap();
     }
 }

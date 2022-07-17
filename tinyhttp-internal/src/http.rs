@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     cell::RefCell,
     fs::File,
     io::{self, BufReader},
@@ -27,7 +26,7 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
-    request::{self, Request},
+    request::Request,
     response::Response,
 };
 
