@@ -257,13 +257,13 @@ fn build_res(req: Request, config: Config) -> Response {
                             response = response
                                 .clone()
                                 .status_line(line)
-                                .body(c.1.unwrap()())
+                                .body(c.2.unwrap()(req_new))
                                 .mime("text/plain");
                         } else {
                             response = response
                                 .clone()
                                 .status_line(line)
-                                .body(c.2.unwrap()(req_new))
+                                .body(c.1.unwrap()())
                                 .mime("text/plain");
                         }
                     }
