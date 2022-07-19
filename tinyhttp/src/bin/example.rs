@@ -3,13 +3,13 @@ use std::net::TcpListener;
 use tinyhttp::prelude::*;
 
 #[get("/")]
-fn get(_req: Request) -> &'static str {
+fn get() -> &'static str {
     "Hello, there!\n"
 }
 
 #[post("/")]
 fn post(body: Request) -> String {
-    format!("Hello, {:?}\n", body.get_raw_body())
+    format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
 }
 
 fn main() {

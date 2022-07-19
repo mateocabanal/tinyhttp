@@ -16,4 +16,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0.98", features = ["full"] }
 quote = "1.0.18"
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.5", default-features = false }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.6", default-features = false }

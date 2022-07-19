@@ -15,6 +15,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     let path_token = args[0].clone();
 
     let body_args = sig.inputs;
+    let is_body_args_empty = body_args.is_empty();
 
     //eprintln!("LEN: {}", body_args.len());
 
@@ -44,6 +45,32 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {None}
     };
 
+    let get_body = if !is_body_args_empty {
+        quote! {
+        fn get_body(&self) -> Option<fn() -> Vec<u8>> {
+            None
+        }
+        fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+            fn body(#body_args) -> Vec<u8> {
+                #body.into()
+            }
+            Some(body)
+            }
+        }
+    } else {
+        quote! {
+        fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+            None
+        }
+        fn get_body(&self) -> Option<fn() -> Vec<u8>> {
+            fn body() -> Vec<u8> {
+                #body.into()
+            }
+            Some(body)
+            }
+        }
+    };
+
     let output = quote! {
         fn #name() -> Box<Route> {
 
@@ -54,6 +81,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                 path: &'static str,
                 method: Method,
                 wildcard: Option<String>,
+                is_args: bool,
             }
 
             impl route {
@@ -62,7 +90,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::GET,
                         wildcard: #wildcard,
-
+                        is_args: #is_body_args_empty,
                     }
                 }
             }
@@ -73,6 +101,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::GET,
                         wildcard: #wildcard,
+                        is_args: #is_body_args_empty,
                     }
                 }
             }
@@ -84,20 +113,18 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn get_method(&self) -> Method {
                     self.method
                 }
-                fn get_body(&self) -> fn(Request) -> Vec<u8> {
-                    fn body(#body_args) -> Vec<u8> {
-                        #body.into()
-                    };
-                    body
+                #get_body
+                fn post_body(&self) -> Option<fn() -> Vec<u8>> {
+                    None
                 }
-                fn post_body(&self) -> fn(Request) -> Vec<u8> {
-                    fn panic(body: Request) -> Vec<u8> {
-                        panic!("NOT A POST ROUTE");
-                    };
-                    panic
+                fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+                    None
                 }
                 fn wildcard(&self) -> Option<String> {
                     self.wildcard.clone()
+                }
+                fn is_args(&self) -> bool {
+                    self.is_args
                 }
             }
 
@@ -114,11 +141,12 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as syn::AttributeArgs);
     let item: syn::ItemFn = syn::parse(item).unwrap();
 
-    let fn_args = item.sig.inputs.iter().next().unwrap();
+    let fn_args = item.sig.inputs;
     let name = item.sig.ident.clone();
     let body = item.block.deref();
 
     let path_token = args[0].clone();
+    let is_body_args_empty = fn_args.is_empty();
 
     let mut path;
     match path_token.clone() {
@@ -145,6 +173,31 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! {None}
     };
+    let post_body = if !is_body_args_empty {
+        quote! {
+        fn post_body(&self) -> Option<fn() -> Vec<u8>> {
+            None
+        }
+        fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+            fn body(#fn_args) -> Vec<u8> {
+                #body.into()
+            }
+            Some(body)
+            }
+        }
+    } else {
+        quote! {
+        fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+            None
+        }
+        fn post_body(&self) -> Option<fn() -> Vec<u8>> {
+            fn body() -> Vec<u8> {
+                #body.into()
+            }
+            Some(body)
+            }
+        }
+    };
     let output = quote! {
         fn #name() -> Box<Route> {
 
@@ -154,7 +207,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             struct route {
                 path: &'static str,
                 method: Method,
-                wildcard: Option<String>
+                wildcard: Option<String>,
+                is_args: bool,
             }
 
             impl route {
@@ -162,7 +216,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                     route {
                         path: #path.into(),
                         method: Method::POST,
-                        wildcard: #wildcard
+                        wildcard: #wildcard,
+                        is_args: #is_body_args_empty,
                     }
                 }
             }
@@ -172,7 +227,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                     route {
                         path: #path.into(),
                         method: Method::POST,
-                        wildcard: #wildcard
+                        wildcard: #wildcard,
+                        is_args: #is_body_args_empty,
                     }
                 }
             }
@@ -184,22 +240,23 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn get_method(&self) -> Method {
                     self.method
                 }
-                fn get_body(&self) -> fn(Request) -> Vec<u8> {
-                    panic!("NOT A GET!");
+                fn get_body(&self) -> Option<fn() -> Vec<u8>> {
+                    None
+                }
+                fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+                    None
                 }
 
                 /*fn post_body(&self) -> fn(Vec<u8>) -> Vec<u8> {
                     #body.into()
                 }*/
 
-                fn post_body(&self) -> fn(Request) -> Vec<u8> {
-                    fn body(#fn_args) -> Vec<u8> {
-                        #body.into()
-                    };
-                    body
-                }
+                #post_body
                 fn wildcard(&self) -> Option<String> {
                     self.wildcard.clone()
+                }
+                fn is_args(&self) -> bool {
+                    self.is_args
                 }
             }
 

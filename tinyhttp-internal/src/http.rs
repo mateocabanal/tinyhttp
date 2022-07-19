@@ -155,12 +155,19 @@ fn build_res(req: Request, config: Config) -> Response {
                 #[cfg(feature = "log")]
                 log::info!("Found path in routes!");
 
-                let req_new = req.clone().set_wildcard(vec.2);
+                let req_new = req.clone().set_wildcard(vec.3);
 
-                response = Response::new()
-                    .status_line("HTTP/1.1 200 OK\r\n")
-                    .body(vec.1(req_new))
-                    .mime("text/plain");
+                if !vec.4 {
+                    response = Response::new()
+                        .status_line("HTTP/1.1 200 OK\r\n")
+                        .body(vec.2.unwrap()(req_new))
+                        .mime("text/plain");
+                } else {
+                    response = Response::new()
+                        .status_line("HTTP/1.1 200 OK\r\n")
+                        .body(vec.1.unwrap()())
+                        .mime("text/plain");
+                }
             }
 
             None => match config.get_mount() {
@@ -229,19 +236,36 @@ fn build_res(req: Request, config: Config) -> Response {
                     if c.0 == stat_line[1] {
                         let line = "HTTP/1.1 200 OK\r\n";
                         let req_new = req.clone();
-                        response = response
-                            .clone()
-                            .status_line(line)
-                            .body(c.1(req_new))
-                            .mime("text/plain");
+                        if !c.4 {
+                            response = response
+                                .clone()
+                                .status_line(line)
+                                .body(c.2.unwrap()(req_new))
+                                .mime("text/plain");
+                        } else {
+                            response = response
+                                .clone()
+                                .status_line(line)
+                                .body(c.1.unwrap()())
+                                .mime("text/plain");
+                        }
                     } else if stat_line[1].contains(&c.0) && c.2.is_some() {
                         let line = "HTTP/1.1 200 OK\r\n";
                         let split = stat_line[1].split(&c.0).last().unwrap();
                         let req_new = req.clone().set_wildcard(Some(split.to_string()));
-                        response = response
-                            .status_line(line)
-                            .body(c.1(req_new))
-                            .mime("text/plain");
+                        if !c.4 {
+                            response = response
+                                .clone()
+                                .status_line(line)
+                                .body(c.1.unwrap()())
+                                .mime("text/plain");
+                        } else {
+                            response = response
+                                .clone()
+                                .status_line(line)
+                                .body(c.2.unwrap()(req_new))
+                                .mime("text/plain");
+                        }
                     }
                 }
             }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufRead, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
@@ -29,9 +29,12 @@ pub enum Method {
 pub trait Route: DynClone {
     fn get_path(&self) -> &str;
     fn get_method(&self) -> Method;
-    fn get_body(&self) -> fn(Request) -> Vec<u8>;
-    fn post_body(&self) -> fn(Request) -> Vec<u8>;
+    fn get_body(&self) -> Option<fn() -> Vec<u8>>;
+    fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>>;
+    fn post_body(&self) -> Option<fn() -> Vec<u8>>;
+    fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>>;
     fn wildcard(&self) -> Option<String>;
+    fn is_args(&self) -> bool;
 }
 
 pub struct HttpListener {
@@ -138,8 +141,24 @@ impl Routes {
 #[derive(Clone)]
 pub struct Config {
     mount_point: Option<String>,
-    get_routes: Option<Vec<(String, fn(Request) -> Vec<u8>, Option<String>)>>,
-    post_routes: Option<Vec<(String, fn(Request) -> Vec<u8>, Option<String>)>>,
+    get_routes: Option<
+        Vec<(
+            String,
+            Option<fn() -> Vec<u8>>,
+            Option<fn(Request) -> Vec<u8>>,
+            Option<String>,
+            bool,
+        )>,
+    >,
+    post_routes: Option<
+        Vec<(
+            String,
+            Option<fn() -> Vec<u8>>,
+            Option<fn(Request) -> Vec<u8>>,
+            Option<String>,
+            bool,
+        )>,
+    >,
     debug: bool,
     pub ssl: bool,
     ssl_chain: Option<String>,
@@ -237,8 +256,20 @@ impl Config {
     /// ```
 
     pub fn routes(mut self, routes: Routes) -> Self {
-        let mut get_routes: Vec<(String, fn(Request) -> Vec<u8>, Option<String>)> = vec![];
-        let mut post_routes: Vec<(String, fn(Request) -> Vec<u8>, Option<String>)> = vec![];
+        let mut get_routes: Vec<(
+            String,
+            Option<fn() -> Vec<u8>>,
+            Option<fn(Request) -> Vec<u8>>,
+            Option<String>,
+            bool,
+        )> = vec![];
+        let mut post_routes: Vec<(
+            String,
+            Option<fn() -> Vec<u8>>,
+            Option<fn(Request) -> Vec<u8>>,
+            Option<String>,
+            bool,
+        )> = vec![];
         let routes = routes.get_stream();
 
         for route in routes {
@@ -250,7 +281,9 @@ impl Config {
                     get_routes.push((
                         clone.get_path().to_string(),
                         clone.get_body(),
+                        clone.get_body_with(),
                         clone.wildcard(),
+                        clone.is_args(),
                     ));
                 }
                 Method::POST => {
@@ -259,7 +292,9 @@ impl Config {
                     post_routes.push((
                         clone.get_path().to_string(),
                         clone.post_body(),
+                        clone.post_body_with(),
                         clone.wildcard(),
+                        clone.is_args(),
                     ));
                 }
             }
@@ -352,7 +387,13 @@ impl Config {
     pub fn get_routes(
         &self,
         path: String,
-    ) -> Option<(String, fn(Request) -> Vec<u8>, Option<String>)> {
+    ) -> Option<(
+        String,
+        Option<fn() -> Vec<u8>>,
+        Option<fn(Request) -> Vec<u8>>,
+        Option<String>,
+        bool,
+    )> {
         match self.get_routes.clone() {
             Some(vec) => {
                 for i in vec {
@@ -365,7 +406,7 @@ impl Config {
                     } else if path.contains(&i.0) && i.2.is_some() {
                         let split = path.split(&i.0).last().unwrap();
 
-                        return Some((i.0.clone(), i.1, Some(split.to_string())));
+                        return Some((i.0.clone(), i.1, i.2, Some(split.to_string()), i.4));
                     } else {
                         return None;
                     }
@@ -376,7 +417,17 @@ impl Config {
         None
     }
 
-    pub fn post_routes(&self) -> Option<Vec<(String, fn(Request) -> Vec<u8>, Option<String>)>> {
+    pub fn post_routes(
+        &self,
+    ) -> Option<
+        Vec<(
+            String,
+            Option<fn() -> Vec<u8>>,
+            Option<fn(Request) -> Vec<u8>>,
+            Option<String>,
+            bool,
+        )>,
+    > {
         self.post_routes.clone()
     }
 
