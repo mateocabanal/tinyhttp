@@ -12,6 +12,13 @@ Uses procedural macros for easy API building.
 tinyhttp also supports async, however it is disabled by default.
 Enable the "async" feature to enable async.
 
+### Performance
+On a Raspberry Pi 4 with ethernet, tinyhttp is able to serve around 15000 requests per second
+
+This was tested with [go-wrk](https://github.com/tsliwowicz/go-wrk)
+
+### Examples
+
 Blocking Example :
 ```rust
 use std::net::TcpListener;
@@ -27,7 +34,7 @@ fn main() {
 }
 
 #[get("/")]
-fn get(_body: Request) -> &'static str {
+fn get() -> &'static str {
   "Hello, World!"
 }
 
@@ -54,7 +61,7 @@ async fn main() {
 }
 
 #[get("/")]
-fn get(_body: Request) -> &'static str {
+fn get() -> &'static str {
   "Hello, World!"
 }
 
