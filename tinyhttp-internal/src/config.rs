@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufRead, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
