@@ -61,11 +61,11 @@ async fn main() {
 }
 
 #[get("/")]
-fn get() -> &'static str {
+fn get(_req: Request) -> &'static str {
   "Hello, World!"
 }
 
 #[post("/")]
-fn post(body: Request) -> &'static str {
+fn post(_req: Request) -> &'static str {
   "Hi, there!"
 }
