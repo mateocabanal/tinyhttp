@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
+use std::fmt::Debug;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
@@ -21,12 +22,14 @@ use crate::{http::start_http, thread_pool::ThreadPool};
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
 
-#[derive(Clone, Copy)]
+type RouteVec = Vec<Box<dyn Route>>;
+
+#[derive(Clone, Copy, Debug)]
 pub enum Method {
     GET,
     POST,
 }
-pub trait Route: DynClone {
+pub trait Route: DynClone + Sync + Send + Debug {
     fn get_path(&self) -> &str;
     fn get_method(&self) -> Method;
     fn get_body(&self) -> Option<fn() -> Vec<u8>>;
@@ -35,6 +38,13 @@ pub trait Route: DynClone {
     fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>>;
     fn wildcard(&self) -> Option<String>;
     fn is_args(&self) -> bool;
+    fn clone_dyn(&self) -> Box<dyn Route>;
+}
+
+impl Clone for Box<dyn Route> {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
 }
 
 pub struct HttpListener {
@@ -124,16 +134,16 @@ impl HttpListener {
 }
 
 pub struct Routes {
-    routes: Vec<Box<dyn Route>>,
+    routes: RouteVec,
 }
 
 impl Routes {
-    pub fn new<R: Into<Vec<Box<dyn Route>>>>(routes: R) -> Routes {
+    pub fn new<R: Into<RouteVec>>(routes: R) -> Routes {
         let routes = routes.into();
         Routes { routes }
     }
 
-    pub fn get_stream(self) -> Vec<Box<dyn Route>> {
+    pub fn get_stream(self) -> RouteVec {
         self.routes
     }
 }
@@ -141,24 +151,8 @@ impl Routes {
 #[derive(Clone)]
 pub struct Config {
     mount_point: Option<String>,
-    get_routes: Option<
-        Vec<(
-            String,
-            Option<fn() -> Vec<u8>>,
-            Option<fn(Request) -> Vec<u8>>,
-            Option<String>,
-            bool,
-        )>,
-    >,
-    post_routes: Option<
-        Vec<(
-            String,
-            Option<fn() -> Vec<u8>>,
-            Option<fn(Request) -> Vec<u8>>,
-            Option<String>,
-            bool,
-        )>,
-    >,
+    get_routes: Option<RouteVec>,
+    post_routes: Option<RouteVec>,
     debug: bool,
     pub ssl: bool,
     ssl_chain: Option<String>,
@@ -258,20 +252,8 @@ impl Config {
     /// ```
 
     pub fn routes(mut self, routes: Routes) -> Self {
-        let mut get_routes: Vec<(
-            String,
-            Option<fn() -> Vec<u8>>,
-            Option<fn(Request) -> Vec<u8>>,
-            Option<String>,
-            bool,
-        )> = vec![];
-        let mut post_routes: Vec<(
-            String,
-            Option<fn() -> Vec<u8>>,
-            Option<fn(Request) -> Vec<u8>>,
-            Option<String>,
-            bool,
-        )> = vec![];
+        let mut get_routes: RouteVec = vec![];
+        let mut post_routes: RouteVec = vec![];
         let routes = routes.get_stream();
 
         for route in routes {
@@ -280,24 +262,12 @@ impl Config {
                 Method::GET => {
                     #[cfg(feature = "log")]
                     log::info!("GET Route init!: {}", clone.get_path());
-                    get_routes.push((
-                        clone.get_path().to_string(),
-                        clone.get_body(),
-                        clone.get_body_with(),
-                        clone.wildcard(),
-                        clone.is_args(),
-                    ));
+                    get_routes.push(route);
                 }
                 Method::POST => {
                     #[cfg(feature = "log")]
                     log::info!("POST Route init!: {}", clone.get_path());
-                    post_routes.push((
-                        clone.get_path().to_string(),
-                        clone.post_body(),
-                        clone.post_body_with(),
-                        clone.wildcard(),
-                        clone.is_args(),
-                    ));
+                    post_routes.push(route);
                 }
             }
         }
@@ -390,29 +360,15 @@ impl Config {
     pub fn get_mount(&self) -> Option<String> {
         self.mount_point.clone()
     }
-    pub fn get_routes(
-        &self,
-        path: String,
-    ) -> Option<(
-        String,
-        Option<fn() -> Vec<u8>>,
-        Option<fn(Request) -> Vec<u8>>,
-        Option<String>,
-        bool,
-    )> {
+    pub fn get_routes(&self, path: &String) -> Option<Box<dyn Route>> {
         match self.get_routes.clone() {
-            Some(vec) => {
-                for i in vec {
-                    if self.get_debug() {
-                        #[cfg(feature = "log")]
-                        log::info!("Route found: {}", i.0);
-                    }
-                    if i.0 == path {
-                        return Some(i);
-                    } else if path.contains(&i.0) && i.2.is_some() {
-                        let split = path.split(&i.0).last().unwrap();
+            Some(routes) => {
+                for route in routes {
+                    #[cfg(feature = "log")]
+                    log::trace!("Route found: {:#?}", route);
 
-                        return Some((i.0.clone(), i.1, i.2, Some(split.to_string()), i.4));
+                    if route.get_path() == path {
+                        return Some(route);
                     } else {
                         return None;
                     }
@@ -423,18 +379,27 @@ impl Config {
         None
     }
 
-    pub fn post_routes(
-        &self,
-    ) -> Option<
-        Vec<(
-            String,
-            Option<fn() -> Vec<u8>>,
-            Option<fn(Request) -> Vec<u8>>,
-            Option<String>,
-            bool,
-        )>,
-    > {
-        self.post_routes.clone()
+    pub fn post_routes(&self, path: &String) -> Option<Box<dyn Route>> {
+        match self.post_routes.clone() {
+            Some(routes) => {
+                for route in routes {
+                    #[cfg(feature = "log")]
+                    log::debug!("POST route found: {:#?}", route);
+                    #[cfg(feature = "log")]
+                    log::debug!("PATH: {}", path);
+
+                    if route.get_path() == path {
+                        #[cfg(feature = "log")]
+                        log::debug!("Returned POST ROUTE!");
+                        return Some(route);
+                    } else {
+                        return None;
+                    }
+                }
+            }
+            None => return None,
+        }
+        None
     }
 
     pub fn get_spa(&self) -> bool {
