@@ -149,23 +149,30 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 fn build_res(req: Request, config: Config) -> Response {
     let mut response = Response::new();
     let status_line = req.get_status_line();
+    let req_path = Rc::new(status_line[1].clone());
     match status_line[0].as_str() {
-        "GET" => match config.get_routes(status_line[1].clone()) {
-            Some(vec) => {
+        "GET" => match config.get_routes(req_path.as_ref()) {
+            Some(route) => {
                 #[cfg(feature = "log")]
                 log::info!("Found path in routes!");
 
-                let req_new = req.clone().set_wildcard(vec.3);
+                let req_new = if route.wildcard().is_some() {
+                    let split = req_path.split(route.get_path()).last().unwrap();
 
-                if !vec.4 {
+                    req.clone().set_wildcard(Some(split.into()))
+                } else {
+                    req.clone()
+                };
+
+                if route.is_args() {
                     response = Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(vec.2.unwrap()(req_new))
+                        .body(route.get_body_with().unwrap()(req_new))
                         .mime("text/plain");
                 } else {
                     response = Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(vec.1.unwrap()())
+                        .body(route.get_body().unwrap()())
                         .mime("text/plain");
                 }
             }
@@ -226,47 +233,31 @@ fn build_res(req: Request, config: Config) -> Response {
                 }
             },
         },
-        "POST" => match config.post_routes() {
-            Some(vec) => {
+        "POST" => match config.post_routes(req_path.as_ref()) {
+            Some(route) => {
                 #[cfg(feature = "log")]
                 log::info!("POST");
 
-                let stat_line = status_line.clone();
-                for c in vec.iter() {
-                    if c.0 == stat_line[1] {
-                        let line = "HTTP/1.1 200 OK\r\n";
-                        let req_new = req.clone();
-                        if !c.4 {
-                            response = response
-                                .clone()
-                                .status_line(line)
-                                .body(c.2.unwrap()(req_new))
-                                .mime("text/plain");
-                        } else {
-                            response = response
-                                .clone()
-                                .status_line(line)
-                                .body(c.1.unwrap()())
-                                .mime("text/plain");
-                        }
-                    } else if stat_line[1].contains(&c.0) && c.2.is_some() {
-                        let line = "HTTP/1.1 200 OK\r\n";
-                        let split = stat_line[1].split(&c.0).last().unwrap();
-                        let req_new = req.clone().set_wildcard(Some(split.to_string()));
-                        if !c.4 {
-                            response = response
-                                .clone()
-                                .status_line(line)
-                                .body(c.2.unwrap()(req_new))
-                                .mime("text/plain");
-                        } else {
-                            response = response
-                                .clone()
-                                .status_line(line)
-                                .body(c.1.unwrap()())
-                                .mime("text/plain");
-                        }
-                    }
+                let req_new = if route.wildcard().is_some() {
+                    let stat_line = status_line[1].clone();
+
+                    let split = stat_line.split(route.get_path()).last().unwrap();
+
+                    req.clone().set_wildcard(Some(split.into()))
+                } else {
+                    req.clone()
+                };
+
+                if !route.is_args() {
+                    response = Response::new()
+                        .status_line("HTTP/1.1 200 OK\r\n")
+                        .body(route.get_body().unwrap()())
+                        .mime("text/plain")
+                } else {
+                    response = Response::new()
+                        .status_line("HTTP/1.1 200 OK\r\n")
+                        .body(route.get_body_with().unwrap()(req_new))
+                        .mime("text/plain")
                 }
             }
 
