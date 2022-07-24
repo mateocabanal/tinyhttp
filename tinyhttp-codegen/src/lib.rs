@@ -16,7 +16,6 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let body_args = sig.inputs;
     let is_body_args = !body_args.is_empty();
-
     //eprintln!("LEN: {}", body_args.len());
 
     let mut path;
@@ -150,6 +149,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let path_token = args[0].clone();
     let is_body_args = !fn_args.is_empty();
+    eprintln!("NAME: {}, {:?}", name, is_body_args);
 
     let mut path;
     match path_token.clone() {

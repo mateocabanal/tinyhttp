@@ -354,17 +354,27 @@ impl Config {
     pub fn get_mount(&self) -> Option<String> {
         self.mount_point.clone()
     }
-    pub fn get_routes(&self, path: &String) -> Option<Box<dyn Route>> {
+    pub fn get_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
+        if path.chars().last().unwrap() == '/' && path.matches('/').count() > 1 {
+            path.pop();
+        };
+
+        #[cfg(feature = "log")]
+        log::trace!("get_routes -> new_path: {}", &path);
+
         match self.get_routes.clone() {
             Some(routes) => {
                 for route in routes {
                     #[cfg(feature = "log")]
-                    log::trace!("Route found: {:#?}", route);
+                    log::trace!("get_routes -> paths: {}", route.get_path());
 
                     if route.get_path() == path {
+                        #[cfg(feature = "log")]
+                        log::trace!("Route found: {:#?}", route);
+
                         return Some(route);
                     } else {
-                        return None;
+                        continue;
                     }
                 }
             }
@@ -373,21 +383,32 @@ impl Config {
         None
     }
 
-    pub fn post_routes(&self, path: &String) -> Option<Box<dyn Route>> {
+    pub fn post_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
+        #[cfg(feature = "log")]
+        log::trace!("post_routes -> path: {}", path);
+        if path.chars().last().unwrap() == '/' && path.matches('/').count() > 1 {
+            path.pop();
+        };
+        #[cfg(feature = "log")]
+        log::trace!("get_routes -> new_path: {}", &path);
+
         match self.post_routes.clone() {
             Some(routes) => {
                 for route in routes {
-                    #[cfg(feature = "log")]
-                    log::debug!("POST route found: {:#?}", route);
-                    #[cfg(feature = "log")]
-                    log::debug!("PATH: {}", path);
-
                     if route.get_path() == path {
                         #[cfg(feature = "log")]
-                        log::debug!("Returned POST ROUTE!");
+                        log::debug!(
+                            "POST route found: {:#?}, get_body: {:?}, get_body_with: {:?}",
+                            route,
+                            route.post_body().is_some(),
+                            route.post_body_with().is_some()
+                        );
+                        #[cfg(feature = "log")]
+                        log::debug!("PATH: {}", path);
+
                         return Some(route);
                     } else {
-                        return None;
+                        continue;
                     }
                 }
             }
