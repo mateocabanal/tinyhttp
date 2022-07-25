@@ -374,6 +374,11 @@ impl Config {
                     #[cfg(feature = "log")]
                     log::trace!("get_routes -> paths: {}", route.get_path());
 
+                    if route.wildcard().is_some() {
+                        if path.contains(route.get_path()) {
+                            return Some(route);
+                        }
+                    }
                     if route.get_path() == path {
                         #[cfg(feature = "log")]
                         log::trace!("Route found: {:#?}", route);
@@ -401,16 +406,21 @@ impl Config {
         match self.post_routes.clone() {
             Some(routes) => {
                 for route in routes {
+                    if route.wildcard().is_some() {
+                        if path.contains(route.get_path()) {
+                            return Some(route);
+                        }
+                    }
                     if route.get_path() == path {
                         #[cfg(feature = "log")]
-                        log::debug!(
+                        log::trace!(
                             "POST route found: {:#?}, get_body: {:?}, get_body_with: {:?}",
                             route,
                             route.post_body().is_some(),
                             route.post_body_with().is_some()
                         );
                         #[cfg(feature = "log")]
-                        log::debug!("PATH: {}", path);
+                        log::trace!("PATH: {}", path);
 
                         return Some(route);
                     } else {
