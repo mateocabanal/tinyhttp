@@ -15,8 +15,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     let path_token = args[0].clone();
 
     let body_args = sig.inputs;
-    let is_body_args_empty = body_args.is_empty();
-
+    let is_body_args = !body_args.is_empty();
     //eprintln!("LEN: {}", body_args.len());
 
     let mut path;
@@ -45,7 +44,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {None}
     };
 
-    let get_body = if !is_body_args_empty {
+    let get_body = if is_body_args {
         quote! {
         fn get_body(&self) -> Option<fn() -> Vec<u8>> {
             None
@@ -76,7 +75,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #[allow(non_camel_case_types)]
 
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             struct route {
                 path: &'static str,
                 method: Method,
@@ -90,7 +89,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::GET,
                         wildcard: #wildcard,
-                        is_args: #is_body_args_empty,
+                        is_args: #is_body_args,
                     }
                 }
             }
@@ -101,7 +100,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::GET,
                         wildcard: #wildcard,
-                        is_args: #is_body_args_empty,
+                        is_args: #is_body_args,
                     }
                 }
             }
@@ -126,6 +125,9 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn is_args(&self) -> bool {
                     self.is_args
                 }
+                fn clone_dyn(&self) -> Box<dyn Route> {
+                    Box::new(self.clone())
+                }
             }
 
             Box::new(route::new())
@@ -146,7 +148,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     let body = item.block.deref();
 
     let path_token = args[0].clone();
-    let is_body_args_empty = fn_args.is_empty();
+    let is_body_args = !fn_args.is_empty();
 
     let mut path;
     match path_token.clone() {
@@ -173,7 +175,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! {None}
     };
-    let post_body = if !is_body_args_empty {
+    let post_body = if is_body_args {
         quote! {
         fn post_body(&self) -> Option<fn() -> Vec<u8>> {
             None
@@ -203,7 +205,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #[allow(non_camel_case_types)]
 
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             struct route {
                 path: &'static str,
                 method: Method,
@@ -217,7 +219,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::POST,
                         wildcard: #wildcard,
-                        is_args: #is_body_args_empty,
+                        is_args: #is_body_args,
                     }
                 }
             }
@@ -228,7 +230,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                         path: #path.into(),
                         method: Method::POST,
                         wildcard: #wildcard,
-                        is_args: #is_body_args_empty,
+                        is_args: #is_body_args,
                     }
                 }
             }
@@ -257,6 +259,9 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 fn is_args(&self) -> bool {
                     self.is_args
+                }
+                fn clone_dyn(&self) -> Box<dyn Route> {
+                    Box::new(self.clone())
                 }
             }
 

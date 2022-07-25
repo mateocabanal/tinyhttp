@@ -31,7 +31,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "async"))]
-pub(crate) fn start_http(http: HttpListener) {
+pub fn start_http(http: HttpListener) {
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
         let config = http.config.clone();
@@ -151,7 +151,6 @@ fn build_res(req: Request, config: Config) -> Response {
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
     log::trace!("build_res -> req_path: {}", req_path.borrow());
-
     match status_line[0].as_str() {
         "GET" => match config.get_routes(&mut req_path.borrow_mut()) {
             Some(route) => {

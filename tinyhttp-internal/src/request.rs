@@ -6,7 +6,7 @@ use std::collections::HashMap;
 ///
 /// body is used when the body of the request is not a String
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Request {
     parsed_body: Option<String>,
     headers: HashMap<String, String>,
