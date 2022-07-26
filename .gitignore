@@ -1,3 +1,4 @@
 demo-*
 rocket-*
 target/
+*.rustfmt
