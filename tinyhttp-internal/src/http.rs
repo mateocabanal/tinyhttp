@@ -160,7 +160,10 @@ fn build_res(req: Request, config: Config) -> Response {
 
                 let req_new = if route.wildcard().is_some() {
                     let stat_line = status_line[1].clone();
-                    let split = stat_line.split(route.get_path()).last().unwrap();
+                    let split = stat_line
+                        .split(&(route.get_path().to_string() + "/"))
+                        .last()
+                        .unwrap();
 
                     req.clone().set_wildcard(Some(split.into()))
                 } else {
@@ -242,7 +245,10 @@ fn build_res(req: Request, config: Config) -> Response {
                 let req_new = if route.wildcard().is_some() {
                     let stat_line = status_line[1].clone();
 
-                    let split = stat_line.split(route.get_path()).last().unwrap();
+                    let split = stat_line
+                        .split(&(route.get_path().to_string() + "/"))
+                        .last()
+                        .unwrap();
 
                     req.clone().set_wildcard(Some(split.into()))
                 } else {
