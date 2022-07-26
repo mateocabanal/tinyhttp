@@ -71,7 +71,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         status_line_index_opt.unwrap()
     } else {
         #[cfg(feature = "log")]
-        log::info!("failed parsing status line!");
+        log::warn!("failed parsing status line!");
 
         0usize
     };
@@ -156,7 +156,7 @@ fn build_res(req: Request, config: Config) -> Response {
         "GET" => match config.get_routes(&mut req_path.borrow_mut()) {
             Some(route) => {
                 #[cfg(feature = "log")]
-                log::info!("Found path in routes!");
+                log::debug!("Found path in routes!");
 
                 let req_new = if route.wildcard().is_some() {
                     let stat_line = status_line[1].clone();
@@ -237,7 +237,7 @@ fn build_res(req: Request, config: Config) -> Response {
         "POST" => match config.post_routes(&mut req_path.borrow_mut()) {
             Some(route) => {
                 #[cfg(feature = "log")]
-                log::info!("POST");
+                log::debug!("POST");
 
                 let req_new = if route.wildcard().is_some() {
                     let stat_line = status_line[1].clone();
@@ -327,7 +327,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     if req_headers.contains_key("accept-encoding") {
         if config.get_gzip() && comp.contains(&"gzip".to_string()) {
             #[cfg(feature = "log")]
-            log::info!("GZIP ENABLED!");
+            log::debug!("GZIP ENABLED!");
             let start: Instant = std::time::Instant::now();
             let body = response.borrow_mut().clone();
             let mut writer = GzEncoder::new(Vec::new(), Compression::default());
@@ -338,7 +338,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
                 .headers
                 .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
             #[cfg(feature = "log")]
-            log::info!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
+            log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
         }
     }
 
