@@ -55,6 +55,7 @@ pub use tinyhttp_internal as internal;
 
 pub mod prelude {
     pub use tinyhttp_codegen::*;
+    pub use tinyhttp_internal::codegen::route::{GetRoute, PostRoute};
     pub use tinyhttp_internal::config::*;
     pub use tinyhttp_internal::request::Request;
 }
