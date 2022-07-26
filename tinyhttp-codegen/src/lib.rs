@@ -34,103 +34,48 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::Lit::Verbatim(_) => todo!(),
         },
     };
-    let wildcard = if path.contains(":") {
-        let path2 = path.clone();
-        let mut iter = path2.split(":");
+
+    let new_wildcard = if path.contains("/:") {
+        let path_clone = path.clone();
+        let mut iter = path_clone.split(":");
         path = iter.next().unwrap().to_string();
         let id = iter.next().unwrap().to_string();
-        quote! {Some(#id.into())}
+        if path.len() != 1 {
+            path.pop();
+        };
+        quote! {get_route = get_route.set_wildcard(#id.into());}
     } else {
-        quote! {None}
+        quote! {}
     };
 
-    let get_body = if is_body_args {
+    let new_get_body = if is_body_args {
         quote! {
-        fn get_body(&self) -> Option<fn() -> Vec<u8>> {
-            None
-        }
-        fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
             fn body(#body_args) -> Vec<u8> {
                 #body.into()
             }
-            Some(body)
-            }
+
+            get_route = get_route.set_body_with(body);
         }
     } else {
         quote! {
-        fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
-            None
-        }
-        fn get_body(&self) -> Option<fn() -> Vec<u8>> {
             fn body() -> Vec<u8> {
                 #body.into()
             }
-            Some(body)
-            }
+
+            get_route = get_route.set_body(body);
         }
     };
 
     let output = quote! {
-        fn #name() -> Box<Route> {
+        fn #name() -> Box<dyn Route> {
+            let mut get_route = GetRoute::new()
+                .set_path(#path.into())
+                .set_is_args(#is_body_args);
 
-            #[allow(non_camel_case_types)]
+            #new_wildcard
+            #new_get_body
 
-            #[derive(Clone, Debug)]
-            struct route {
-                path: &'static str,
-                method: Method,
-                wildcard: Option<String>,
-                is_args: bool,
-            }
-
-            impl route {
-                fn new() -> Self {
-                    route {
-                        path: #path.into(),
-                        method: Method::GET,
-                        wildcard: #wildcard,
-                        is_args: #is_body_args,
-                    }
-                }
-            }
-
-            impl Default for route {
-                fn default() -> route {
-                    route {
-                        path: #path.into(),
-                        method: Method::GET,
-                        wildcard: #wildcard,
-                        is_args: #is_body_args,
-                    }
-                }
-            }
-
-            impl Route for route {
-                fn get_path(&self) -> &str {
-                    self.path
-                }
-                fn get_method(&self) -> Method {
-                    self.method
-                }
-                #get_body
-                fn post_body(&self) -> Option<fn() -> Vec<u8>> {
-                    None
-                }
-                fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
-                    None
-                }
-                fn wildcard(&self) -> Option<String> {
-                    self.wildcard.clone()
-                }
-                fn is_args(&self) -> bool {
-                    self.is_args
-                }
-                fn clone_dyn(&self) -> Box<dyn Route> {
-                    Box::new(self.clone())
-                }
-            }
-
-            Box::new(route::new())
+            Box::new(get_route)
         }
     };
 
@@ -166,106 +111,46 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::Lit::Verbatim(_) => todo!(),
         },
     };
-    let wildcard = if path.contains(":") {
-        let path2 = path.clone();
-        let mut iter = path2.split(":");
+    let new_wildcard = if path.contains("/:") {
+        let path_clone = path.clone();
+        let mut iter = path_clone.split(":");
         path = iter.next().unwrap().to_string();
         let id = iter.next().unwrap().to_string();
-        quote! {Some(#id.into())}
+        if path.len() != 1 {
+            path.pop();
+        };
+        quote! {post_route = post_route.set_wildcard(#id.into());}
     } else {
-        quote! {None}
+        quote! {}
     };
-    let post_body = if is_body_args {
+
+    let new_post_body = if is_body_args {
         quote! {
-        fn post_body(&self) -> Option<fn() -> Vec<u8>> {
-            None
-        }
-        fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
             fn body(#fn_args) -> Vec<u8> {
                 #body.into()
             }
-            Some(body)
-            }
+
+            post_route = post_route.set_body_with(body);
         }
     } else {
         quote! {
-        fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
-            None
-        }
-        fn post_body(&self) -> Option<fn() -> Vec<u8>> {
             fn body() -> Vec<u8> {
                 #body.into()
             }
-            Some(body)
-            }
+
+            post_route = post_route.set_body(body);
         }
     };
     let output = quote! {
         fn #name() -> Box<Route> {
+            let mut post_route = PostRoute::new()
+                .set_path(#path.into())
+                .set_is_args(#is_body_args);
 
-            #[allow(non_camel_case_types)]
+            #new_wildcard
+            #new_post_body
 
-            #[derive(Clone, Debug)]
-            struct route {
-                path: &'static str,
-                method: Method,
-                wildcard: Option<String>,
-                is_args: bool,
-            }
-
-            impl route {
-                fn new() -> Self {
-                    route {
-                        path: #path.into(),
-                        method: Method::POST,
-                        wildcard: #wildcard,
-                        is_args: #is_body_args,
-                    }
-                }
-            }
-
-            impl Default for route {
-                fn default() -> route {
-                    route {
-                        path: #path.into(),
-                        method: Method::POST,
-                        wildcard: #wildcard,
-                        is_args: #is_body_args,
-                    }
-                }
-            }
-
-            impl Route for route {
-                fn get_path(&self) -> &str {
-                    self.path
-                }
-                fn get_method(&self) -> Method {
-                    self.method
-                }
-                fn get_body(&self) -> Option<fn() -> Vec<u8>> {
-                    None
-                }
-                fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
-                    None
-                }
-
-                /*fn post_body(&self) -> fn(Vec<u8>) -> Vec<u8> {
-                    #body.into()
-                }*/
-
-                #post_body
-                fn wildcard(&self) -> Option<String> {
-                    self.wildcard.clone()
-                }
-                fn is_args(&self) -> bool {
-                    self.is_args
-                }
-                fn clone_dyn(&self) -> Box<dyn Route> {
-                    Box::new(self.clone())
-                }
-            }
-
-            Box::new(route::new())
+            Box::new(post_route)
         }
     };
 
