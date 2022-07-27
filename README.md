@@ -1,6 +1,6 @@
 # HTTP SERVER
 
-[![CodeFactor](https://www.codefactor.io/repository/github/mateocabanal/tinyhttp/badge)](https://www.codefactor.io/repository/github/mateocabanal/tinyhttp)
+[![codecov](https://codecov.io/gh/mateocabanal/tinyhttp/branch/main/graph/badge.svg?token=LH8YSHNKRF)](https://codecov.io/gh/mateocabanal/tinyhttp)
 [![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg)](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
