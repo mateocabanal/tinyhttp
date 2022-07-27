@@ -22,7 +22,7 @@ pub enum BodyType {
 }
 
 impl Request {
-    pub(crate) fn new(
+    pub fn new(
         raw_body: Vec<u8>,
         raw_headers: Vec<String>,
         status_line: Vec<String>,

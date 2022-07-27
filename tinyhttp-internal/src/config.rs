@@ -227,7 +227,7 @@ impl Config {
     /// Add routes with a Route member
     ///
     /// ### Example:
-    /// ```no_run
+    /// ```ignore
     /// use tinyhttp::prelude::*;
     ///
     ///
@@ -237,8 +237,8 @@ impl Config {
     /// }
     ///
     /// #[post("/test")]
-    /// fn post_test(body: Request) -> Vec<u8> {
-    ///   "Hello, Post!".into()
+    /// fn post_test() -> Vec<u8> {
+    ///   b"Hello, Post!".to_vec()
     /// }
     ///
     /// fn main() {

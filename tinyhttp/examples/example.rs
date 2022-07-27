@@ -29,6 +29,11 @@ fn post_wildcard(req: Request) -> String {
     format!("Hello, {}\n", wildcard)
 }
 
+#[post("/test/returning/vec")]
+fn post_return_vec() -> Vec<u8> {
+    b"Hello World!".to_vec()
+}
+
 fn main() {
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![
@@ -37,6 +42,7 @@ fn main() {
         post_without_args(),
         get_wildcard(),
         post_wildcard(),
+        post_return_vec()
     ]);
     let config = Config::new().routes(routes).gzip(false);
     let http = HttpListener::new(socket, config);
