@@ -59,3 +59,4 @@ pub mod prelude {
     pub use tinyhttp_internal::config::*;
     pub use tinyhttp_internal::request::Request;
 }
+
