@@ -8,3 +8,5 @@ pub mod http;
 
 #[cfg(feature = "async")]
 pub mod async_http;
+
+pub mod http2;

@@ -167,6 +167,7 @@ pub struct Config {
     br: bool,
     gzip: bool,
     spa: bool,
+    http2: bool,
 }
 
 impl Config {
@@ -212,6 +213,7 @@ impl Config {
             gzip: false,
             br: false,
             spa: false,
+            http2: false,
         }
     }
 
@@ -367,6 +369,10 @@ impl Config {
     /// Enables gzip compression
     pub fn gzip(mut self, res: bool) -> Self {
         self.gzip = res;
+        self
+    }
+    pub fn http2(mut self, res: bool) -> Self {
+        self.http2 = res;
         self
     }
     pub fn get_headers(&self) -> Option<HashMap<String, String>> {
