@@ -14,11 +14,14 @@ pub mod async_http;
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub mod http2;
 =======
 
 =======
 >>>>>>> 996c073 (adding more unit tests)
+=======
+>>>>>>> e1184af (fixing heroku)
 #[cfg(test)]
 mod tests {
     #[test]
@@ -57,4 +60,10 @@ mod tests {
         );
     }
 }
+<<<<<<< HEAD
 >>>>>>> 996c073 (adding more unit tests)
+=======
+=======
+pub mod http2;
+>>>>>>> 2396bab (fixing heroku)
+>>>>>>> e1184af (fixing heroku)
