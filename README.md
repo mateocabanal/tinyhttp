@@ -4,7 +4,10 @@
 [![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg)](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
+## [Live Demo](https://mateo-tinyhttp.herokuapp.com/)
+
 #### The "tinyhttp" crate contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
+
 
 Speedy HTTP server built purely in Rust. Comes with built-in GZIP compression and HTTPS support.
 
