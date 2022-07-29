@@ -1,1 +1,1 @@
-web: ./target/release/examples/example
+web: ./target/release/example
