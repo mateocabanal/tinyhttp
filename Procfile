@@ -1,1 +1,1 @@
-web: ./target/release/example
+web: ./target/release/heroku-deploy
