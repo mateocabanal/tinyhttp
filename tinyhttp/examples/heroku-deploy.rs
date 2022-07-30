@@ -7,11 +7,6 @@ fn api_get() -> &'static str {
     "Hello, there!\n"
 }
 
-#[get("/")]
-fn index_get() -> &'static str {
-    "<html><head><title>tinyhttp - Heroku</title></head><body><h1>Hello From tinyhttp!</h1></body></html>"
-}
-
 #[post("/")]
 fn post(body: Request) -> String {
     format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
