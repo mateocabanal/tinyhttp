@@ -35,21 +35,16 @@ fn post_return_vec() -> Vec<u8> {
 }
 
 fn init_html() {
-    let mut file = File::create("html.zip").unwrap();
-    let zip = reqwest::blocking::get(
-        "https://github.com/mateocabanal/tinyhttp-heroku-html/archive/refs/heads/main.zip",
-    )
-    .unwrap()
-    .bytes()
-    .unwrap();
-
-    copy(&mut zip.as_ref(), &mut file).unwrap();
+    Command::new("wget")
+        .arg("https://github.com/mateocabanal/tinyhttp-heroku-html/archive/refs/heads/main.zip")
+        .output()
+        .unwrap();
 
     println!(
         "unzip output: {}",
         String::from_utf8(
             Command::new("unzip")
-                .arg("html.zip")
+                .arg("main.zip")
                 .output()
                 .unwrap()
                 .stdout
