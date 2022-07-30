@@ -2,3 +2,4 @@ demo-*
 rocket-*
 target/
 *.rustfmt
+heroku-html/
