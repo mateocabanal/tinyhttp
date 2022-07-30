@@ -1,4 +1,4 @@
-use std::net::TcpListener;
+use std::{fs::File, io::copy, net::TcpListener, process::Command};
 
 use tinyhttp::prelude::*;
 
@@ -39,10 +39,36 @@ fn post_return_vec() -> Vec<u8> {
     b"Hello World!".to_vec()
 }
 
+fn init_html() {
+    let mut file = File::create("html.zip").unwrap();
+    let zip = reqwest::blocking::get(
+        "https://github.com/mateocabanal/tinyhttp-heroku-html/archive/refs/heads/main.zip",
+    )
+    .unwrap()
+    .bytes()
+    .unwrap();
+
+    copy(&mut zip.as_ref(), &mut file).unwrap();
+
+    println!(
+        "unzip output: {}",
+        String::from_utf8(
+            Command::new("unzip")
+                .arg("html.zip")
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
+
+    println!("UNZIPPED!");
+}
+
 fn main() {
+    init_html();
     let socket = TcpListener::bind(":::".to_owned() + &std::env::var("PORT").unwrap()).unwrap();
     let routes = Routes::new(vec![
-        index_get(),
         api_get(),
         post(),
         post_without_args(),
@@ -50,7 +76,10 @@ fn main() {
         post_wildcard(),
         post_return_vec(),
     ]);
-    let config = Config::new().routes(routes).gzip(false);
+    let config = Config::new()
+        .routes(routes)
+        .gzip(false)
+        .mount_point("./tinyhttp-heroku-html-main");
     let http = HttpListener::new(socket, config);
 
     http.start();
