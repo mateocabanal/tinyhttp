@@ -34,6 +34,12 @@ fn post_return_vec() -> Vec<u8> {
     b"Hello World!".to_vec()
 }
 
+#[get("/update_html")]
+fn update_html() -> &'static str {
+    init_html();
+    "OK"
+}
+
 fn init_html() {
     Command::new("wget")
         .arg("https://github.com/mateocabanal/tinyhttp-heroku-html/archive/refs/heads/main.zip")
