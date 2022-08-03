@@ -83,23 +83,23 @@ impl Request {
         self
     }
 
-    pub fn get_raw_body(&self) -> Vec<u8> {
-        self.body.clone()
+    pub fn get_raw_body(&self) -> &Vec<u8> {
+        &self.body
     }
 
-    pub fn get_parsed_body(&self) -> Option<String> {
-        self.parsed_body.clone()
+    pub fn get_parsed_body(&self) -> Option<&String> {
+        self.parsed_body.as_ref()
     }
 
-    pub fn get_headers(&self) -> HashMap<String, String> {
-        self.headers.clone()
+    pub fn get_headers(&self) -> &HashMap<String, String> {
+        &self.headers
     }
 
-    pub fn get_status_line(&self) -> Vec<String> {
-        self.status_line.clone()
+    pub fn get_status_line(&self) -> &Vec<String> {
+        &self.status_line
     }
 
-    pub fn get_wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    pub fn get_wildcard(&self) -> Option<&String> {
+        self.wildcard.as_ref()
     }
 }
