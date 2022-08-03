@@ -3,3 +3,4 @@ rocket-*
 target/
 *.rustfmt
 heroku-html/
+build.sh
