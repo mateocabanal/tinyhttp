@@ -146,7 +146,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
-fn build_res(req: Request, config: Config) -> Response {
+fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
@@ -159,21 +159,21 @@ fn build_res(req: Request, config: Config) -> Response {
                 log::debug!("Found path in routes!");
 
                 let req_new = if route.wildcard().is_some() {
-                    let stat_line = status_line[1].clone();
+                    let stat_line = &status_line[1];
                     let split = stat_line
                         .split(&(route.get_path().to_string() + "/"))
                         .last()
                         .unwrap();
 
-                    req.clone().set_wildcard(Some(split.into()))
+                    req.set_wildcard(Some(split.into()))
                 } else {
-                    req.clone()
+                    req
                 };
 
                 if route.is_args() {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body_with().unwrap()(req_new))
+                        .body(route.get_body_with().unwrap()(req_new.clone()))
                         .mime("text/plain")
                 } else {
                     Response::new()
@@ -194,10 +194,10 @@ fn build_res(req: Request, config: Config) -> Response {
                             .status_line(line)
                             .body(body)
                             .mime("text/html")
-                    } else if Path::new(&path.clone()).is_file() {
-                        let body = read_to_vec(path.clone()).unwrap();
+                    } else if Path::new(&path).is_file() {
+                        let body = read_to_vec(&path).unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
-                        let mime = mime_guess::from_path(path.clone())
+                        let mime = mime_guess::from_path(&path)
                             .first_raw()
                             .unwrap_or("text/plain");
                         Response::new().status_line(line).body(body).mime(mime)
@@ -243,16 +243,16 @@ fn build_res(req: Request, config: Config) -> Response {
                 log::debug!("POST");
 
                 let req_new = if route.wildcard().is_some() {
-                    let stat_line = status_line[1].clone();
+                    let stat_line = &status_line[1];
 
                     let split = stat_line
                         .split(&(route.get_path().to_string() + "/"))
                         .last()
                         .unwrap();
 
-                    req.clone().set_wildcard(Some(split.into()))
+                    req.set_wildcard(Some(split.into()))
                 } else {
-                    req.clone()
+                    req
                 };
 
                 if !route.is_args() {
@@ -263,7 +263,7 @@ fn build_res(req: Request, config: Config) -> Response {
                 } else {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body_with().unwrap()(req_new))
+                        .body(route.post_body_with().unwrap()(req_new.clone()))
                         .mime("text/plain")
                 }
             }
@@ -283,9 +283,9 @@ fn build_res(req: Request, config: Config) -> Response {
 
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let buf = read_stream(conn);
-    let request = build_and_parse_req(buf);
+    let mut request = build_and_parse_req(buf);
 
-    let response = Rc::new(RefCell::new(build_res(request.clone(), config.clone())));
+    let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
     let mime = response.borrow_mut().mime.clone().unwrap();
 
     let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
@@ -315,7 +315,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         .headers
         .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
 
-    let req_headers = request.clone().get_headers();
+    let req_headers = request.get_headers();
 
     let comp = if req_headers.contains_key("accept-encoding") {
         let tmp_str: String = req_headers.get("accept-encoding").unwrap().to_owned();
