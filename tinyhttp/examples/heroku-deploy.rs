@@ -71,6 +71,7 @@ fn main() {
         get_wildcard(),
         post_wildcard(),
         post_return_vec(),
+        update_html(),
     ]);
     let config = Config::new()
         .routes(routes)
