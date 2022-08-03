@@ -341,12 +341,17 @@ impl Config {
         self.gzip = res;
         self
     }
+<<<<<<< HEAD
     pub fn http2(mut self, res: bool) -> Self {
         self.http2 = res;
         self
     }
     pub fn get_headers(&self) -> Option<HashMap<String, String>> {
         self.headers.clone()
+=======
+    pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
+        self.headers.as_ref()
+>>>>>>> 010b293 (replacing .clone()'s with references)
     }
     pub fn get_br(&self) -> bool {
         self.br
@@ -357,8 +362,8 @@ impl Config {
     pub fn get_debug(&self) -> bool {
         self.debug
     }
-    pub fn get_mount(&self) -> Option<String> {
-        self.mount_point.clone()
+    pub fn get_mount(&self) -> Option<&String> {
+        self.mount_point.as_ref()
     }
     pub fn get_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
         if path.chars().last().unwrap() == '/' && path.matches('/').count() > 1 {
