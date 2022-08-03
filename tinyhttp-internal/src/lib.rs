@@ -35,7 +35,7 @@ mod tests {
             None,
         );
         assert_eq!(
-            request.get_parsed_body().unwrap(),
+            *request.get_parsed_body().unwrap(),
             "Hello, World!".to_string()
         )
     }
