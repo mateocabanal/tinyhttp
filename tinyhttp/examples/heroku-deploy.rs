@@ -1,4 +1,5 @@
-use std::{fs::File, io::copy, net::TcpListener, process::Command};
+#[warn(unused)]
+use std::{net::TcpListener, process::Command};
 
 use tinyhttp::prelude::*;
 
@@ -66,12 +67,12 @@ fn main() {
     let socket = TcpListener::bind(":::".to_owned() + &std::env::var("PORT").unwrap()).unwrap();
     let routes = Routes::new(vec![
         api_get(),
+        update_html(),
         post(),
         post_without_args(),
         get_wildcard(),
         post_wildcard(),
         post_return_vec(),
-        update_html(),
     ]);
     let config = Config::new()
         .routes(routes)
