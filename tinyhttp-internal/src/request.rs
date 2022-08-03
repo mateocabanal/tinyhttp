@@ -78,7 +78,7 @@ impl Request {
         }
     }
 
-    pub(crate) fn set_wildcard(mut self, w: Option<String>) -> Self {
+    pub(crate) fn set_wildcard(&mut self, w: Option<String>) -> &Self {
         self.wildcard = w;
         self
     }
