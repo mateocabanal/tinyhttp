@@ -341,10 +341,13 @@ impl Config {
         self.gzip = res;
         self
     }
+
     pub fn http2(mut self, res: bool) -> Self {
         self.http2 = res;
         self
     }
+
+
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }
