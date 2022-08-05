@@ -282,6 +282,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
 }
 
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
+    let is_http2_check = conn.bytes().map(|x| x.unwrap());
     let buf = read_stream(conn);
     let mut request = build_and_parse_req(buf);
 

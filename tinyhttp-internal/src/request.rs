@@ -13,6 +13,7 @@ pub struct Request {
     status_line: Vec<String>,
     body: Vec<u8>,
     wildcard: Option<String>,
+    is_http2: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +67,7 @@ impl Request {
                 headers,
                 status_line,
                 wildcard,
+                is_http2: false,
             }
         } else {
             Request {
@@ -74,12 +76,18 @@ impl Request {
                 headers,
                 status_line,
                 wildcard,
+                is_http2: false,
             }
         }
     }
 
     pub(crate) fn set_wildcard(&mut self, w: Option<String>) -> &Self {
         self.wildcard = w;
+        self
+    }
+
+    pub(crate) fn set_is_http2(&mut self, b: bool) -> &Self {
+        self.is_http2 = b;
         self
     }
 
