@@ -12,16 +12,8 @@ pub mod http;
 #[cfg(feature = "async")]
 pub mod async_http;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 pub mod http2;
-=======
 
-=======
->>>>>>> 996c073 (adding more unit tests)
-=======
->>>>>>> e1184af (fixing heroku)
 #[cfg(test)]
 mod tests {
     #[test]
@@ -42,10 +34,6 @@ mod tests {
             "Hello, World!".to_string()
         )
     }
-<<<<<<< HEAD
-}
->>>>>>> 8391d6a (add unit tests)
-=======
     #[test]
     fn build_response() {
         use crate::response::Response;
@@ -60,10 +48,3 @@ mod tests {
         );
     }
 }
-<<<<<<< HEAD
->>>>>>> 996c073 (adding more unit tests)
-=======
-=======
-pub mod http2;
->>>>>>> 2396bab (fixing heroku)
->>>>>>> e1184af (fixing heroku)

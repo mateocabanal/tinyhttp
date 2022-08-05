@@ -341,30 +341,12 @@ impl Config {
         self.gzip = res;
         self
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
     pub fn http2(mut self, res: bool) -> Self {
         self.http2 = res;
         self
     }
-    pub fn get_headers(&self) -> Option<HashMap<String, String>> {
-        self.headers.clone()
-=======
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
->>>>>>> 010b293 (replacing .clone()'s with references)
-=======
-    pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
-        self.headers.as_ref()
-=======
-    pub fn http2(mut self, res: bool) -> Self {
-        self.http2 = res;
-        self
-    }
-    pub fn get_headers(&self) -> Option<HashMap<String, String>> {
-        self.headers.clone()
->>>>>>> 2396bab (fixing heroku)
->>>>>>> e1184af (fixing heroku)
     }
     pub fn get_br(&self) -> bool {
         self.br
