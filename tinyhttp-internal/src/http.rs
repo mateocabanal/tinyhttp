@@ -173,7 +173,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                 if route.is_args() {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body_with().unwrap()(req_new.clone()))
+                        .body(route.get_body_with().unwrap()(req_new.to_owned()))
                         .mime("text/plain")
                 } else {
                     Response::new()
@@ -263,7 +263,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                 } else {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body_with().unwrap()(req_new.clone()))
+                        .body(route.post_body_with().unwrap()(req_new.to_owned()))
                         .mime("text/plain")
                 }
             }
