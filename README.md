@@ -4,6 +4,8 @@
 [![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg)](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml)
 ![Crates.io](https://img.shields.io/crates/d/tinyhttp?color=purple&logo=cargo&style=for-the-badge)
 
+![Alt](https://repobeats.axiom.co/api/embed/eb3b94060f5f66f0fc1be7ccbc7f581d10c7ca34.svg "Repobeats analytics image")
+
 ## [Live Demo](https://mateo-tinyhttp.herokuapp.com/)
 
 #### The "tinyhttp" crate contains none of the internal code due to the procedural macro crate depending on data types on the internal crate.
