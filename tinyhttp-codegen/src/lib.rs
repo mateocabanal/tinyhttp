@@ -22,18 +22,18 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut path;
     match path_token.clone() {
-        syn::NestedMeta::Meta(_) => todo!(),
+        syn::NestedMeta::Meta(_) => panic!("IN TOKEN MATCH!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
                 path = e.value();
             }
-            syn::Lit::ByteStr(_) => todo!(),
-            syn::Lit::Byte(_) => todo!(),
-            syn::Lit::Char(_) => todo!(),
-            syn::Lit::Int(_) => todo!(),
-            syn::Lit::Float(_) => todo!(),
-            syn::Lit::Bool(_) => todo!(),
-            syn::Lit::Verbatim(_) => todo!(),
+            syn::Lit::ByteStr(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Byte(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Char(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Int(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Float(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Bool(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Verbatim(_) => panic!("IN TOKEN MATCH!"),
         },
     };
 
@@ -68,27 +68,29 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let return_type_str = match return_type {
+    /*let return_type_str = match return_type {
         syn::ReturnType::Default => "NO RETURN TYPE!".to_string(),
         syn::ReturnType::Type(_, value) => match *value {
             syn::Type::Path(stream) => stream.path.segments.last().unwrap().ident.to_string(),
-            syn::Type::Verbatim(_) => unimplemented!(),
-            syn::Type::Array(_) => unimplemented!(),
-            syn::Type::BareFn(_) => todo!(),
-            syn::Type::Group(_) => todo!(),
-            syn::Type::ImplTrait(_) => todo!(),
-            syn::Type::Infer(_) => todo!(),
-            syn::Type::Macro(_) => todo!(),
-            syn::Type::Never(_) => todo!(),
-            syn::Type::Paren(_) => todo!(),
-            syn::Type::Ptr(_) => todo!(),
-            syn::Type::Reference(_) => todo!(),
-            syn::Type::Slice(_) => todo!(),
-            syn::Type::TraitObject(_) => todo!(),
-            syn::Type::Tuple(_) => todo!(),
-            _ => todo!(),
+            syn::Type::Verbatim(stream) => stream.to_string(),
+            syn::Type::Array(stream) => panic!("IN ARRAY!"),
+            syn::Type::BareFn(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Group(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::ImplTrait(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Infer(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Macro(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Never(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Paren(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Ptr(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Reference(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Slice(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::TraitObject(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Type::Tuple(_) => panic!("IN MATCH RETURN TYPE!"),
+            _ => panic!("IN MATCH RETURN TYPE!"),
         },
     };
+
+    let is_ret_type_res = return_type_str == "Response";*/
 
     let output = quote! {
         fn #name() -> Box<dyn Route> {
@@ -121,18 +123,18 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut path;
     match path_token.clone() {
-        syn::NestedMeta::Meta(_) => todo!(),
+        syn::NestedMeta::Meta(_) => panic!("IN MATCH RETURN TYPE!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
                 path = e.value();
             }
-            syn::Lit::ByteStr(_) => todo!(),
-            syn::Lit::Byte(_) => todo!(),
-            syn::Lit::Char(_) => todo!(),
-            syn::Lit::Int(_) => todo!(),
-            syn::Lit::Float(_) => todo!(),
-            syn::Lit::Bool(_) => todo!(),
-            syn::Lit::Verbatim(_) => todo!(),
+            syn::Lit::ByteStr(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Byte(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Char(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Int(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Float(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Bool(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Verbatim(_) => panic!("IN MATCH RETURN TYPE!"),
         },
     };
     let new_wildcard = if path.contains("/:") {
