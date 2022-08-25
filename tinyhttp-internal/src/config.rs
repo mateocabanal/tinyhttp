@@ -17,7 +17,9 @@ use async_std::net::{Incoming, TcpListener};
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
 #[cfg(not(feature = "async"))]
-use crate::{http::start_http, thread_pool::ThreadPool};
+use crate::http::start_http;
+
+use rusty_pool::{Builder, ThreadPool};
 
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
@@ -67,11 +69,11 @@ impl HttpListener {
                 config.ssl_chain.clone().unwrap(),
                 config.ssl_priv.clone().unwrap(),
             ));
-            return HttpListener {
+            HttpListener {
                 socket: socket.into(),
                 config,
                 #[cfg(not(feature = "async"))]
-                pool: ThreadPool::new(num_cpus::get()),
+                pool: ThreadPool::default(),
                 #[cfg(feature = "async")]
                 pool: ThreadPoolBuilder::new()
                     .pool_size(num_cpus::get())
@@ -80,13 +82,13 @@ impl HttpListener {
                 #[cfg(feature = "ssl")]
                 ssl_acpt,
                 use_pool: true,
-            };
+            }
         } else {
-            return HttpListener {
+            HttpListener {
                 socket: socket.into(),
                 config,
                 #[cfg(not(feature = "async"))]
-                pool: ThreadPool::new(num_cpus::get()),
+                pool: ThreadPool::default(),
                 #[cfg(feature = "async")]
                 pool: ThreadPoolBuilder::new()
                     .pool_size(num_cpus::get())
@@ -95,13 +97,13 @@ impl HttpListener {
                 #[cfg(feature = "ssl")]
                 ssl_acpt: None,
                 use_pool: true,
-            };
+            }
         }
     }
 
     pub fn threads(mut self, threads: usize) -> Self {
         #[cfg(not(feature = "async"))]
-        let pool = ThreadPool::new(threads);
+        let pool = Builder::new().core_size(threads).build();
 
         #[cfg(feature = "async")]
         let pool = ThreadPoolBuilder::new()
@@ -161,6 +163,12 @@ pub struct Config {
     br: bool,
     gzip: bool,
     spa: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config::new()
+    }
 }
 
 impl Config {
@@ -355,7 +363,7 @@ impl Config {
         self.mount_point.as_ref()
     }
     pub fn get_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
-        if path.chars().last().unwrap() == '/' && path.matches('/').count() > 1 {
+        if path.ends_with('/') && path.matches('/').count() > 1 {
             path.pop();
         };
 
@@ -388,7 +396,7 @@ impl Config {
     pub fn post_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
         #[cfg(feature = "log")]
         log::trace!("post_routes -> path: {}", path);
-        if path.chars().last().unwrap() == '/' && path.matches('/').count() > 1 {
+        if path.ends_with('/') && path.matches('/').count() > 1 {
             path.pop();
         };
         #[cfg(feature = "log")]

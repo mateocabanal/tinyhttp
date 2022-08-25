@@ -6,13 +6,15 @@ use syn::parse_macro_input;
 
 #[proc_macro_attribute]
 pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item_fn: syn::ItemFn = syn::parse(item.clone()).unwrap();
     //eprintln!("{:#?}\n{:#?}", attr, item);
     let args = parse_macro_input!(attr as syn::AttributeArgs);
-    let item: syn::ItemFn = syn::parse(item).unwrap();
-    let sig = item.sig;
+
+    let sig = item_fn.sig;
     let name = sig.ident.clone();
-    let body = item.block.deref();
+    let body = item_fn.block.deref();
     let path_token = args[0].clone();
+    let return_type = sig.output;
 
     let body_args = sig.inputs;
     let is_body_args = !body_args.is_empty();
@@ -64,6 +66,28 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             get_route = get_route.set_body(body);
         }
+    };
+
+    let return_type_str = match return_type {
+        syn::ReturnType::Default => "NO RETURN TYPE!".to_string(),
+        syn::ReturnType::Type(_, value) => match *value {
+            syn::Type::Path(stream) => stream.path.segments.last().unwrap().ident.to_string(),
+            syn::Type::Verbatim(_) => unimplemented!(),
+            syn::Type::Array(_) => unimplemented!(),
+            syn::Type::BareFn(_) => todo!(),
+            syn::Type::Group(_) => todo!(),
+            syn::Type::ImplTrait(_) => todo!(),
+            syn::Type::Infer(_) => todo!(),
+            syn::Type::Macro(_) => todo!(),
+            syn::Type::Never(_) => todo!(),
+            syn::Type::Paren(_) => todo!(),
+            syn::Type::Ptr(_) => todo!(),
+            syn::Type::Reference(_) => todo!(),
+            syn::Type::Slice(_) => todo!(),
+            syn::Type::TraitObject(_) => todo!(),
+            syn::Type::Tuple(_) => todo!(),
+            _ => todo!(),
+        },
     };
 
     let output = quote! {
@@ -141,6 +165,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             post_route = post_route.set_body(body);
         }
     };
+
     let output = quote! {
         fn #name() -> Box<Route> {
             let mut post_route = PostRoute::new()

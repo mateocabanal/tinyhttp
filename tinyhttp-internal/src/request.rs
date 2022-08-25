@@ -59,9 +59,9 @@ impl Request {
         #[cfg(feature = "log")]
         log::info!("Request headers: {:?}", headers);
 
-        if ascii_body.is_none() {
+        if let Some(b) = ascii_body {
             Request {
-                parsed_body: None,
+                parsed_body: Some(b.to_string()),
                 body: raw_body,
                 headers,
                 status_line,
@@ -70,7 +70,7 @@ impl Request {
         } else {
             Request {
                 body: raw_body,
-                parsed_body: Some(ascii_body.unwrap().to_string()),
+                parsed_body: None,
                 headers,
                 status_line,
                 wildcard,
