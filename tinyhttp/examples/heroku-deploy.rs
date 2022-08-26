@@ -76,7 +76,7 @@ fn main() {
     ]);
     let config = Config::new()
         .routes(routes)
-        .gzip(false)
+        .gzip(true)
         .mount_point("./tinyhttp-heroku-html-main");
     let http = HttpListener::new(socket, config);
 
