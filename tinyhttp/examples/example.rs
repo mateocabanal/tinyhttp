@@ -44,7 +44,7 @@ fn main() {
         post_wildcard(),
         post_return_vec()
     ]);
-    let config = Config::new().routes(routes).gzip(false);
+    let config = Config::new().routes(routes).gzip(true);
     let http = HttpListener::new(socket, config);
 
     http.start();
