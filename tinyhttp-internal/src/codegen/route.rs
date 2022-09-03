@@ -1,5 +1,6 @@
 use crate::config::{Method, Route};
 use crate::request::Request;
+use crate::response::Response;
 
 #[derive(Clone, Debug)]
 pub struct GetRoute {
@@ -9,6 +10,9 @@ pub struct GetRoute {
     is_args: Option<bool>,
     get_body: Option<fn() -> Vec<u8>>,
     get_body_with: Option<fn(Request) -> Vec<u8>>,
+
+    get_body_with_res: Option<fn(Request) -> Response>,
+    is_ret_res: bool,
 }
 
 impl Default for GetRoute {
@@ -20,6 +24,8 @@ impl Default for GetRoute {
             is_args: None,
             get_body: None,
             get_body_with: None,
+            get_body_with_res: None,
+            is_ret_res: false,
         }
     }
 }
@@ -52,6 +58,14 @@ impl GetRoute {
         self.get_body_with = Some(body);
         self
     }
+    pub fn set_body_with_res(mut self, body: fn(Request) -> Response) -> Self {
+        self.get_body_with_res = Some(body);
+        self
+    }
+    pub fn set_is_ret_res(mut self, is_ret_res: bool) -> Self {
+        self.is_ret_res = is_ret_res;
+        self
+    }
 }
 
 impl Route for GetRoute {
@@ -67,10 +81,16 @@ impl Route for GetRoute {
     fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
         self.get_body_with
     }
+    fn get_body_with_res(&self) -> Option<fn(Request) -> Response> {
+        self.get_body_with_res
+    }
     fn post_body(&self) -> Option<fn() -> Vec<u8>> {
         None
     }
     fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
+        None
+    }
+    fn post_body_with_res(&self) -> Option<fn(Request) -> Response> {
         None
     }
     fn wildcard(&self) -> Option<String> {
@@ -78,6 +98,9 @@ impl Route for GetRoute {
     }
     fn is_args(&self) -> bool {
         self.is_args.unwrap()
+    }
+    fn is_ret_res(&self) -> bool {
+        self.is_ret_res
     }
     fn clone_dyn(&self) -> Box<dyn Route> {
         Box::new(self.clone())
@@ -92,6 +115,8 @@ pub struct PostRoute {
     is_args: Option<bool>,
     post_body: Option<fn() -> Vec<u8>>,
     post_body_with: Option<fn(Request) -> Vec<u8>>,
+    post_body_with_res: Option<fn(Request) -> Response>,
+    is_ret_res: bool,
 }
 
 impl Default for PostRoute {
@@ -103,6 +128,8 @@ impl Default for PostRoute {
             is_args: None,
             post_body: None,
             post_body_with: None,
+            post_body_with_res: None,
+            is_ret_res: false,
         }
     }
 }
@@ -135,6 +162,14 @@ impl PostRoute {
         self.post_body_with = Some(body);
         self
     }
+    pub fn set_body_with_res(mut self, body: fn(Request) -> Response) -> Self {
+        self.post_body_with_res = Some(body);
+        self
+    }
+    pub fn set_is_ret_res(mut self, is_ret_res: bool) -> Self {
+        self.is_ret_res = is_ret_res;
+        self
+    }
 }
 
 impl Route for PostRoute {
@@ -150,17 +185,26 @@ impl Route for PostRoute {
     fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
         None
     }
+    fn get_body_with_res(&self) -> Option<fn(Request) -> Response> {
+        None
+    }
     fn post_body(&self) -> Option<fn() -> Vec<u8>> {
         self.post_body
     }
     fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>> {
         self.post_body_with
     }
+    fn post_body_with_res(&self) -> Option<fn(Request) -> Response> {
+        self.post_body_with_res
+    }
     fn wildcard(&self) -> Option<String> {
         self.wildcard.clone()
     }
     fn is_args(&self) -> bool {
         self.is_args.unwrap()
+    }
+    fn is_ret_res(&self) -> bool {
+        self.is_ret_res
     }
     fn clone_dyn(&self) -> Box<dyn Route> {
         Box::new(self.clone())

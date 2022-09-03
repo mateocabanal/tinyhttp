@@ -4,7 +4,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(crate) struct Response {
+pub struct Response {
     pub headers: HashMap<String, String>,
     pub status_line: String,
     pub body: Option<Vec<u8>>,
@@ -12,7 +12,7 @@ pub(crate) struct Response {
 }
 
 impl Response {
-    pub(crate) fn new() -> Response {
+    pub fn new() -> Response {
         Response {
             headers: HashMap::new(),
             status_line: String::new(),
@@ -45,7 +45,7 @@ impl Response {
         self
     }
 
-    pub fn send<P: Read + Write>(&self, sock: &mut P) {
+    pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
         let line_bytes = self.status_line.as_bytes().to_vec();
         #[cfg(feature = "log")]
         log::debug!("res status line: {:#?}", self.status_line);
@@ -72,7 +72,7 @@ impl Response {
             String::from_utf8(full_req.clone()).unwrap()
         );
 
-        for i in self.body.as_ref() {
+        if let Some(i) = self.body.as_ref() {
             for j in i {
                 full_req.push(*j);
             }

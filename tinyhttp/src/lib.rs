@@ -28,7 +28,7 @@
 //! use std::net::TcpListener;
 //! use tinyhttp::prelude::*;
 //! #[get("/")]
-//! fn get(_body: Request) -> &'static str {
+//! fn get() -> &'static str {
 //!  "Hello, World!"
 //! }
 //!
@@ -60,3 +60,69 @@ pub mod prelude {
     pub use tinyhttp_internal::request::Request;
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_codegen() {
+        use crate::prelude::*;
+
+        #[get("/")]
+        fn get() -> &'static str {
+            "Hello Test?"
+        }
+
+        #[post("/")]
+        fn post(body: Request) -> String {
+            let headers = body.get_headers();
+            format!(
+                "Accept-Encoding: {}",
+                headers.get("Accept-Encoding").unwrap()
+            )
+        }
+
+        let routes = Routes::new(vec![get(), post()]);
+        assert_eq!(
+            false,
+            routes
+                .clone()
+                .get_stream()
+                .clone()
+                .first()
+                .unwrap()
+                .is_args()
+        );
+        assert_eq!(
+            b"Hello Test?".to_vec(),
+            routes
+                .clone()
+                .get_stream()
+                .first()
+                .unwrap()
+                .get_body()
+                .unwrap()()
+        );
+
+        let request = Request::new(
+            b"Hello".to_vec(),
+            vec!["Accept-Encoding: gzip".to_string()],
+            vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
+            None,
+        );
+
+        assert_eq!(
+            b"Accept-Encoding: gzip".to_vec(),
+            routes
+                .clone()
+                .get_stream()
+                .last()
+                .unwrap()
+                .post_body_with()
+                .unwrap()(request)
+        );
+
+        assert_eq!(
+            None,
+            routes.clone().get_stream().last().unwrap().post_body()
+        );
+    }
+}

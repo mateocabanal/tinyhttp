@@ -19,6 +19,8 @@ use futures::executor::{ThreadPool, ThreadPoolBuilder};
 #[cfg(not(feature = "async"))]
 use crate::http::start_http;
 
+use crate::response::Response;
+
 use rusty_pool::{Builder, ThreadPool};
 
 #[cfg(not(feature = "async"))]
@@ -36,10 +38,13 @@ pub trait Route: DynClone + Sync + Send + Debug {
     fn get_method(&self) -> Method;
     fn get_body(&self) -> Option<fn() -> Vec<u8>>;
     fn get_body_with(&self) -> Option<fn(Request) -> Vec<u8>>;
+    fn get_body_with_res(&self) -> Option<fn(Request) -> Response>;
     fn post_body(&self) -> Option<fn() -> Vec<u8>>;
     fn post_body_with(&self) -> Option<fn(Request) -> Vec<u8>>;
+    fn post_body_with_res(&self) -> Option<fn(Request) -> Response>;
     fn wildcard(&self) -> Option<String>;
     fn is_args(&self) -> bool;
+    fn is_ret_res(&self) -> bool;
     fn clone_dyn(&self) -> Box<dyn Route>;
 }
 
@@ -135,6 +140,7 @@ impl HttpListener {
     }
 }
 
+#[derive(Clone)]
 pub struct Routes {
     routes: RouteVec,
 }

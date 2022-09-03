@@ -164,7 +164,9 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                     req
                 };
 
-                if route.is_args() {
+                if route.is_ret_res() {
+                    route.get_body_with_res().unwrap()(req_new.to_owned())
+                } else if route.is_args() {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
                         .body(route.get_body_with().unwrap()(req_new.to_owned()))
@@ -248,8 +250,9 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                 } else {
                     req
                 };
-
-                if !route.is_args() {
+                if route.is_ret_res() {
+                    route.get_body_with_res().unwrap()(req_new.to_owned())
+                } else if !route.is_args() {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
                         .body(route.post_body().unwrap()())
@@ -334,7 +337,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         let body = response.borrow_mut().body.clone();
         let mut writer = GzEncoder::new(Vec::new(), Compression::default());
         writer.write_all(&body.unwrap()).unwrap();
-        response.borrow_mut().body = Some(writer.finish().unwrap().clone());
+        response.borrow_mut().body = Some(writer.finish().unwrap());
         response
             .borrow_mut()
             .headers

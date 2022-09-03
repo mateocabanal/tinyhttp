@@ -50,9 +50,35 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let new_get_body = if is_body_args {
+    let mut return_type_str = String::new();
+
+    match return_type {
+        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
+        syn::ReturnType::Type(_, value) => match *value.clone() {
+            syn::Type::Path(stream) => {
+                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
+            }
+            _ => return_type_str = "NO RETURN TYPE!".to_string(),
+        },
+    };
+
+    let is_ret_type_res = if return_type_str == "Response" {
+        true
+    } else {
+        false
+    };
+
+    let new_get_body = if is_ret_type_res {
         quote! {
-            fn body(#body_args) -> Vec<u8> {
+            fn body(#body_args) -> Response {
+                #body.into()
+            }
+
+            get_route = get_route.set_body_with_res(body);
+        }
+    } else if is_body_args {
+        quote! {
+           fn body(#body_args) -> Vec<u8> {
                 #body.into()
             }
 
@@ -68,35 +94,12 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    /*let return_type_str = match return_type {
-        syn::ReturnType::Default => "NO RETURN TYPE!".to_string(),
-        syn::ReturnType::Type(_, value) => match *value {
-            syn::Type::Path(stream) => stream.path.segments.last().unwrap().ident.to_string(),
-            syn::Type::Verbatim(stream) => stream.to_string(),
-            syn::Type::Array(stream) => panic!("IN ARRAY!"),
-            syn::Type::BareFn(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Group(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::ImplTrait(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Infer(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Macro(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Never(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Paren(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Ptr(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Reference(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Slice(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::TraitObject(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Type::Tuple(_) => panic!("IN MATCH RETURN TYPE!"),
-            _ => panic!("IN MATCH RETURN TYPE!"),
-        },
-    };
-
-    let is_ret_type_res = return_type_str == "Response";*/
-
     let output = quote! {
         fn #name() -> Box<dyn Route> {
             let mut get_route = GetRoute::new()
                 .set_path(#path.into())
-                .set_is_args(#is_body_args);
+                .set_is_args(#is_body_args)
+                .set_is_ret_res(#is_ret_type_res);
 
             #new_wildcard
             #new_get_body
@@ -117,6 +120,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_args = item.sig.inputs;
     let name = item.sig.ident.clone();
     let body = item.block.deref();
+    let return_type = item.sig.output;
 
     let path_token = args[0].clone();
     let is_body_args = !fn_args.is_empty();
@@ -150,7 +154,33 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let new_post_body = if is_body_args {
+    let mut return_type_str = String::new();
+
+    match return_type {
+        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
+        syn::ReturnType::Type(_, value) => match *value.clone() {
+            syn::Type::Path(stream) => {
+                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
+            }
+            _ => return_type_str = "NO RETURN TYPE!".to_string(),
+        },
+    };
+
+    let is_ret_type_res = if return_type_str == "Response" {
+        true
+    } else {
+        false
+    };
+
+    let new_post_body = if is_ret_type_res {
+        quote! {
+            fn body(#fn_args) -> Response {
+                #body.into()
+            }
+
+            post_route = post_route.set_body_with_res(body);
+        }
+    } else if is_body_args {
         quote! {
             fn body(#fn_args) -> Vec<u8> {
                 #body.into()
@@ -172,7 +202,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         fn #name() -> Box<Route> {
             let mut post_route = PostRoute::new()
                 .set_path(#path.into())
-                .set_is_args(#is_body_args);
+                .set_is_args(#is_body_args)
+                .set_is_ret_res(#is_ret_type_res);
 
             #new_wildcard
             #new_post_body
