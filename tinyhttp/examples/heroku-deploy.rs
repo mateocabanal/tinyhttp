@@ -64,7 +64,7 @@ fn init_html() {
 
 fn main() {
     init_html();
-    let socket = TcpListener::bind(":::".to_owned() + &std::env::var("PORT").unwrap()).unwrap();
+    let socket = TcpListener::bind(":::8080").unwrap();
     let routes = Routes::new(vec![
         api_get(),
         update_html(),

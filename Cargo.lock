@@ -1154,7 +1154,7 @@ checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "tinyhttp"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "log",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp-codegen"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "quote",
  "syn",
@@ -1174,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp-internal"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "dyn-clone",
  "flate2",

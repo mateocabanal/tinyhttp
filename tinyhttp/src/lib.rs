@@ -32,11 +32,8 @@
 //!  "Hello, World!"
 //! }
 //!
-//! /// Functions marked with the post macro must explicitly return a Vec<u8>, but many types are
-//! /// compatible with Into<Vec<u8>>. Must manually do it though.
-//!
 //! #[post("/")]
-//! fn post(body: Request) -> &'static str {
+//! fn post() -> &'static str {
 //!   "Hello, there!"
 //! }
 //!
@@ -49,15 +46,47 @@
 //!   http.start();
 //! }
 //! ```
+//!
+//! All route functions must be included in the `Routes::new(vec![])`
+//!
+//! ### Diving into the route functions
+//!
+//! As of now, route functions can return anything that is `Into<Vec<u8>>` or a `Response`
+//!
+//! ```no_run
+//! use tinyhttp::prelude::*;
+//!
+//! // Example 1: returns anything Into<Vec<u8>>
+//! #[get("/")]
+//! fn ex1_get() -> &'static str {
+//!     "Hello World!"
+//! }
+//!
+//! // Example 2: same as example 1, but takes a Request as an argument
+//! #[get("/ex2")]
+//! fn ex2_get(req: Request) -> String {
+//!     let accept_header = req.get_headers().get("accept").unwrap();
+//!     format!("accept header: {}", accept_header)
+//! }
+//!
+//! // Example 3: takes a Request as an argument and returns a Response for more control
+//! #[get("/ex3")]
+//! fn ex3_get(req: Request) -> Response {
+//!     Response::new()
+//!         .status_line("HTTP/1.1 200 OK\r\n")
+//!         .mime("text/plain")
+//!         .body(b"Hello from response!\r\n".to_vec())
+//! }
 
 pub use tinyhttp_codegen as codegen;
 pub use tinyhttp_internal as internal;
 
 pub mod prelude {
     pub use tinyhttp_codegen::*;
-    pub use tinyhttp_internal::codegen::route::{GetRoute, PostRoute};
+    pub use tinyhttp_internal::codegen::route::*;
     pub use tinyhttp_internal::config::*;
     pub use tinyhttp_internal::request::Request;
+    pub use tinyhttp_internal::response::Response;
 }
 
 #[cfg(test)]
@@ -89,7 +118,14 @@ mod tests {
                 .clone()
                 .first()
                 .unwrap()
-                .is_args()
+                .wildcard()
+                .is_some()
+        );
+        let request = Request::new(
+            b"Hello".to_vec(),
+            vec!["Accept-Encoding: gzip".to_string()],
+            vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
+            None,
         );
         assert_eq!(
             b"Hello Test?".to_vec(),
@@ -98,15 +134,9 @@ mod tests {
                 .get_stream()
                 .first()
                 .unwrap()
-                .get_body()
-                .unwrap()()
-        );
-
-        let request = Request::new(
-            b"Hello".to_vec(),
-            vec!["Accept-Encoding: gzip".to_string()],
-            vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
-            None,
+                .to_res(request.clone())
+                .body
+                .unwrap()
         );
 
         assert_eq!(
@@ -116,13 +146,9 @@ mod tests {
                 .get_stream()
                 .last()
                 .unwrap()
-                .post_body_with()
-                .unwrap()(request)
-        );
-
-        assert_eq!(
-            None,
-            routes.clone().get_stream().last().unwrap().post_body()
+                .to_res(request.clone())
+                .body
+                .unwrap()
         );
     }
 }

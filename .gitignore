@@ -5,3 +5,5 @@ target/
 *.rustfmt
 heroku-html/
 build.sh
+RustConfig
+Procfile

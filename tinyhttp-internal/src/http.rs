@@ -164,19 +164,16 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                     req
                 };
 
-                if route.is_ret_res() {
+                /*if route.is_ret_res() {
                     route.get_body_with_res().unwrap()(req_new.to_owned())
-                } else if route.is_args() {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body_with().unwrap()(req_new.to_owned()))
-                        .mime("text/plain")
                 } else {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body().unwrap()())
+                        .body(route.to_body(req_new.to_owned()))
                         .mime("text/plain")
-                }
+                }*/
+
+                route.to_res(req_new.to_owned())
             }
 
             None => match config.get_mount() {
@@ -250,19 +247,8 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                 } else {
                     req
                 };
-                if route.is_ret_res() {
-                    route.get_body_with_res().unwrap()(req_new.to_owned())
-                } else if !route.is_args() {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body().unwrap()())
-                        .mime("text/plain")
-                } else {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body_with().unwrap()(req_new.to_owned()))
-                        .mime("text/plain")
-                }
+
+                route.to_res(req_new.to_owned())
             }
 
             None => Response::new()
@@ -357,38 +343,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     }
 
     response.borrow_mut().send(conn);
-
-    /*let res = [headers.as_bytes(), &body[..]].concat();
-    match conn.write_all(&res) {
-        Ok(_) => {
-            #[cfg(feature = "log")]
-            log::debug!("WROTE response");
-        }
-
-        Err(_) => {
-            #[cfg(feature = "log")]
-            log::warn!("ERROR on response!")
-        }
-    }*/
 }
-
-/*pub fn get_header(vec: Vec<String>, header: String) -> Result<Vec<String>, String> {
-    let found = match vec.iter().position(|s| s.starts_with(&header)) {
-        Some(pos) => pos,
-        None => return Err("NOT FOUND".to_string()),
-    };
-    let res = HEAD
-        .find(&vec[found])
-        .unwrap()
-        .unwrap()
-        .as_str()
-        .to_string();
-    let res: Vec<String> = res
-        .split(",")
-        .map(|c| c.to_string().split_whitespace().collect())
-        .collect();
-    Ok(res)
-}*/
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     fn inner(path: &Path) -> io::Result<Vec<u8>> {

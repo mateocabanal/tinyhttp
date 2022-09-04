@@ -50,6 +50,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    #[allow(unused_assignments)]
     let mut return_type_str = String::new();
 
     match return_type {
@@ -70,22 +71,31 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new_get_body = if is_ret_type_res {
         quote! {
+            let mut get_route = GetRouteWithReqAndRes::new()
+                .set_path(#path.into());
+
             fn body(#body_args) -> Response {
                 #body.into()
             }
 
-            get_route = get_route.set_body_with_res(body);
+            get_route = get_route.set_body(body);
         }
     } else if is_body_args {
         quote! {
-           fn body(#body_args) -> Vec<u8> {
+            let mut get_route = GetRouteWithReq::new()
+                .set_path(#path.into());
+
+            fn body(#body_args) -> Vec<u8> {
                 #body.into()
             }
 
-            get_route = get_route.set_body_with(body);
+            get_route = get_route.set_body(body);
         }
     } else {
         quote! {
+            let mut get_route = BasicGetRoute::new()
+                .set_path(#path.into());
+
             fn body() -> Vec<u8> {
                 #body.into()
             }
@@ -96,13 +106,14 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let output = quote! {
         fn #name() -> Box<dyn Route> {
-            let mut get_route = GetRoute::new()
+            /*let mut get_route = GetRoute::new()
                 .set_path(#path.into())
                 .set_is_args(#is_body_args)
-                .set_is_ret_res(#is_ret_type_res);
+                .set_is_ret_res(#is_ret_type_res);*/
 
-            #new_wildcard
+
             #new_get_body
+            #new_wildcard
 
             Box::new(get_route)
         }
@@ -154,6 +165,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    #[allow(unused_assignments)]
     let mut return_type_str = String::new();
 
     match return_type {
@@ -174,22 +186,31 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new_post_body = if is_ret_type_res {
         quote! {
+            let mut post_route = PostRouteWithReqAndRes::new()
+                .set_path(#path.into());
+
             fn body(#fn_args) -> Response {
                 #body.into()
             }
 
-            post_route = post_route.set_body_with_res(body);
+            post_route = post_route.set_body(body);
         }
     } else if is_body_args {
         quote! {
+            let mut post_route = PostRouteWithReq::new()
+                .set_path(#path.into());
+
             fn body(#fn_args) -> Vec<u8> {
                 #body.into()
             }
 
-            post_route = post_route.set_body_with(body);
+            post_route = post_route.set_body(body);
         }
     } else {
         quote! {
+            let mut post_route = BasicPostRoute::new()
+                .set_path(#path.into());
+
             fn body() -> Vec<u8> {
                 #body.into()
             }
@@ -199,14 +220,14 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let output = quote! {
-        fn #name() -> Box<Route> {
-            let mut post_route = PostRoute::new()
+        fn #name() -> Box<dyn Route> {
+            /*let mut post_route = PostRoute::new()
                 .set_path(#path.into())
                 .set_is_args(#is_body_args)
-                .set_is_ret_res(#is_ret_type_res);
+                .set_is_ret_res(#is_ret_type_res);*/
 
-            #new_wildcard
             #new_post_body
+            #new_wildcard
 
             Box::new(post_route)
         }

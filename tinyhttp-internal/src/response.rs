@@ -3,7 +3,7 @@ use std::{
     io::{Read, Write},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Response {
     pub headers: HashMap<String, String>,
     pub status_line: String,
