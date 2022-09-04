@@ -12,8 +12,8 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 
 [dev-dependencies]
 criterion = "0.3"
-reqwest = { version = "*", features = ["blocking"] }
-log = "*"
+reqwest = { version = "0.11.11", features = ["blocking"] }
+log = "0.4.17"
 
 [[bench]]
 name = "create_req"
