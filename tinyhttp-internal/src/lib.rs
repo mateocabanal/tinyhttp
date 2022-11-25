@@ -8,6 +8,7 @@ pub mod response;
 pub mod thread_pool;
 
 pub mod http;
+pub mod http2;
 
 #[cfg(test)]
 mod tests {

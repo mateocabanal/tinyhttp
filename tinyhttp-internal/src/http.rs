@@ -28,6 +28,7 @@ use crate::{
     config::{Config, HttpListener},
     request::Request,
     response::Response,
+    http2::HttpFrame
 };
 
 #[cfg(not(feature = "async"))]
