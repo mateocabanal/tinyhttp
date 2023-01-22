@@ -60,9 +60,9 @@ impl Request {
         #[cfg(feature = "log")]
         log::info!("Request headers: {:?}", headers);
 
-        if ascii_body.is_none() {
+        if let Some(b) = ascii_body {
             Request {
-                parsed_body: None,
+                parsed_body: Some(b.to_string()),
                 body: raw_body,
                 headers,
                 status_line,
@@ -72,7 +72,7 @@ impl Request {
         } else {
             Request {
                 body: raw_body,
-                parsed_body: Some(ascii_body.unwrap().to_string()),
+                parsed_body: None,
                 headers,
                 status_line,
                 wildcard,
@@ -86,23 +86,22 @@ impl Request {
         self
     }
 
-    pub(crate) fn set_is_http2(&mut self, b: bool) -> &Self {
-        self.is_http2 = b;
-        self
-    }
-
+    /// Get request body as bytes
     pub fn get_raw_body(&self) -> &Vec<u8> {
         &self.body
     }
 
+    /// Get request body as a string
     pub fn get_parsed_body(&self) -> Option<&String> {
         self.parsed_body.as_ref()
     }
 
+    /// Get request headers in a HashMap
     pub fn get_headers(&self) -> &HashMap<String, String> {
         &self.headers
     }
 
+    /// Get status line of request
     pub fn get_status_line(&self) -> &Vec<String> {
         &self.status_line
     }

@@ -26,6 +26,7 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
+    http2::{self},
     request::Request,
     response::Response,
 };
@@ -62,16 +63,19 @@ pub(crate) fn start_http(http: HttpListener) {
 }
 
 fn build_and_parse_req(buf: Vec<u8>) -> Request {
+    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+        http2::connection::parse_data_frame(&buf).unwrap();
+    }
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
         .map(|(i, _)| i);
 
-    let status_line_index = if status_line_index_opt.is_some() {
-        status_line_index_opt.unwrap()
+    let status_line_index = if let Some(status) = status_line_index_opt {
+        status
     } else {
         #[cfg(feature = "log")]
-        log::warn!("failed parsing status line!");
+        log::error!("failed parsing status line!");
 
         0usize
     };
@@ -95,16 +99,10 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 
     let mut headers = Vec::<String>::new();
     let mut headers_index = vec![first_header_index + 2];
-    loop {
-        let header_index: usize;
-        match safe_http_index
-            .find(|(_, w)| matches!(*w, b"\r\n"))
-            .map(|(i, _)| i + 2)
-        {
-            Some(s) => header_index = s,
-            _ => break,
-        }
-
+    while let Some(header_index) = safe_http_index
+        .find(|(_, w)| matches!(*w, b"\r\n"))
+        .map(|(i, _)| i + 2)
+    {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
@@ -125,7 +123,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     let iter_status_line = String::from_utf8(buf[..status_line_index].to_vec()).unwrap();
 
     //let headers = parse_headers(http.to_string());
-    let str_status_line = Vec::from_iter(iter_status_line.split_whitespace().into_iter());
+    let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
     let status_line: Rc<Vec<String>> =
         Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
     #[cfg(feature = "log")]
@@ -146,7 +144,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
-fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
+fn build_res(req: &mut Request, config: &Config) -> Response {
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
@@ -170,17 +168,16 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                     req
                 };
 
-                if route.is_args() {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body_with().unwrap()(req_new.clone()))
-                        .mime("text/plain")
+                /*if route.is_ret_res() {
+                    route.get_body_with_res().unwrap()(req_new.to_owned())
                 } else {
                     Response::new()
                         .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.get_body().unwrap()())
+                        .body(route.to_body(req_new.to_owned()))
                         .mime("text/plain")
-                }
+                }*/
+
+                route.to_res(req_new.to_owned())
             }
 
             None => match config.get_mount() {
@@ -203,7 +200,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                         Response::new().status_line(line).body(body).mime(mime)
                     } else if Path::new(&path).is_dir() {
                         if Path::new(&(path.to_owned() + "/index.html")).is_file() {
-                            let body = read_to_vec(path.to_owned() + "/index.html").unwrap();
+                            let body = read_to_vec(path + "/index.html").unwrap();
 
                             let line = "HTTP/1.1 200 OK\r\n";
                             Response::new()
@@ -217,7 +214,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                                 .mime("text/html")
                         }
                     } else if Path::new(&(path.to_owned() + ".html")).is_file() {
-                        let body = read_to_vec(path.to_owned() + ".html").unwrap();
+                        let body = read_to_vec(path + ".html").unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
                         Response::new()
                             .status_line(line)
@@ -255,17 +252,7 @@ fn build_res<'a>(req: &'a mut Request, config: &Config) -> Response {
                     req
                 };
 
-                if !route.is_args() {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body().unwrap()())
-                        .mime("text/plain")
-                } else {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.post_body_with().unwrap()(req_new.clone()))
-                        .mime("text/plain")
-                }
+                route.to_res(req_new.to_owned())
             }
 
             None => Response::new()
@@ -291,7 +278,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
 
     let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
         Some(mime) => mime.mime_type().to_string(),
-        None => mime.to_string(),
+        None => mime,
     };
 
     match config.get_headers() {
@@ -306,10 +293,10 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         None => (),
     }
 
-    response.borrow_mut().headers.insert(
-        "Content-Type: ".to_string(),
-        inferred_mime.to_owned() + "\r\n",
-    );
+    response
+        .borrow_mut()
+        .headers
+        .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
 
     response
         .borrow_mut()
@@ -320,7 +307,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
 
     let comp = if req_headers.contains_key("accept-encoding") {
         let tmp_str: String = req_headers.get("accept-encoding").unwrap().to_owned();
-        let res = tmp_str.split(",").map(|s| s.trim().to_string()).collect();
+        let res = tmp_str.split(',').map(|s| s.trim().to_string()).collect();
 
         #[cfg(feature = "log")]
         log::debug!("{:#?}", &res);
@@ -331,23 +318,39 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     };
 
     #[cfg(feature = "sys")]
-    if req_headers.contains_key("accept-encoding") {
-        if config.get_gzip() && comp.contains(&"gzip".to_string()) {
-            #[cfg(feature = "log")]
-            log::debug!("GZIP ENABLED!");
-            let start: Instant = std::time::Instant::now();
-            let body = response.borrow_mut().clone();
-            let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-            writer.write_all(&body.body.as_ref().unwrap()).unwrap();
-            body.body(writer.finish().unwrap());
-            response
-                .borrow_mut()
-                .headers
-                .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
-            #[cfg(feature = "log")]
-            log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
-        }
+    if config.get_gzip()
+        && comp.contains(&"gzip".to_string())
+        && req_headers.contains_key("accept-encoding")
+    {
+        #[cfg(feature = "log")]
+        log::debug!("GZIP ENABLED!");
+        let start: Instant = std::time::Instant::now();
+        let body = response.borrow_mut().body.clone();
+        let mut writer = GzEncoder::new(Vec::new(), Compression::default());
+        writer.write_all(&body.unwrap()).unwrap();
+        response.borrow_mut().body = Some(writer.finish().unwrap());
+        response
+            .borrow_mut()
+            .headers
+            .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
+        #[cfg(feature = "log")]
+        log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
     }
+
+    // let mut upgrade = String::from("");
+    // if req_headers.contains_key("connection") {
+    //     upgrade = req_headers.get("connection").unwrap().to_string();
+
+    //     let mut brw = response.borrow_mut();
+    //     brw.headers
+    //         .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
+
+    //     brw.headers
+    //         .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
+
+    //     response.borrow_mut().send_http_2(conn);
+    //     return;
+    // }
 
     #[cfg(feature = "log")]
     {
@@ -360,38 +363,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     }
 
     response.borrow_mut().send(conn);
-
-    /*let res = [headers.as_bytes(), &body[..]].concat();
-    match conn.write_all(&res) {
-        Ok(_) => {
-            #[cfg(feature = "log")]
-            log::debug!("WROTE response");
-        }
-
-        Err(_) => {
-            #[cfg(feature = "log")]
-            log::warn!("ERROR on response!")
-        }
-    }*/
 }
-
-/*pub fn get_header(vec: Vec<String>, header: String) -> Result<Vec<String>, String> {
-    let found = match vec.iter().position(|s| s.starts_with(&header)) {
-        Some(pos) => pos,
-        None => return Err("NOT FOUND".to_string()),
-    };
-    let res = HEAD
-        .find(&vec[found])
-        .unwrap()
-        .unwrap()
-        .as_str()
-        .to_string();
-    let res: Vec<String> = res
-        .split(",")
-        .map(|c| c.to_string().split_whitespace().collect())
-        .collect();
-    Ok(res)
-}*/
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     fn inner(path: &Path) -> io::Result<Vec<u8>> {
@@ -413,13 +385,11 @@ fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
             Ok(n) => {
                 if n == 0 {
                     break;
+                } else if n < buffer_size {
+                    request_buffer.append(&mut buffer[..n].to_vec());
+                    break;
                 } else {
-                    if n < buffer_size {
-                        request_buffer.append(&mut buffer[..n].to_vec());
-                        break;
-                    } else {
-                        request_buffer.append(&mut buffer);
-                    }
+                    request_buffer.append(&mut buffer);
                 }
             }
             Err(_) => println!("Error: Could not read string!"),

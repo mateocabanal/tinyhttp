@@ -64,7 +64,7 @@ fn init_html() {
 
 fn main() {
     init_html();
-    let socket = TcpListener::bind(":::".to_owned() + &std::env::var("PORT").unwrap()).unwrap();
+    let socket = TcpListener::bind(":::8080").unwrap();
     let routes = Routes::new(vec![
         api_get(),
         update_html(),
@@ -76,7 +76,7 @@ fn main() {
     ]);
     let config = Config::new()
         .routes(routes)
-        .gzip(false)
+        .gzip(true)
         .mount_point("./tinyhttp-heroku-html-main");
     let http = HttpListener::new(socket, config);
 

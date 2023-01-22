@@ -1,6 +1,9 @@
+Cargo.lock
 demo-*
 rocket-*
 target/
 *.rustfmt
 heroku-html/
 build.sh
+RustConfig
+Procfile

@@ -6,13 +6,15 @@ use syn::parse_macro_input;
 
 #[proc_macro_attribute]
 pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item_fn: syn::ItemFn = syn::parse(item.clone()).unwrap();
     //eprintln!("{:#?}\n{:#?}", attr, item);
     let args = parse_macro_input!(attr as syn::AttributeArgs);
-    let item: syn::ItemFn = syn::parse(item).unwrap();
-    let sig = item.sig;
+
+    let sig = item_fn.sig;
     let name = sig.ident.clone();
-    let body = item.block.deref();
+    let body = item_fn.block.deref();
     let path_token = args[0].clone();
+    let return_type = sig.output;
 
     let body_args = sig.inputs;
     let is_body_args = !body_args.is_empty();
@@ -20,18 +22,18 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut path;
     match path_token.clone() {
-        syn::NestedMeta::Meta(_) => todo!(),
+        syn::NestedMeta::Meta(_) => panic!("IN TOKEN MATCH!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
                 path = e.value();
             }
-            syn::Lit::ByteStr(_) => todo!(),
-            syn::Lit::Byte(_) => todo!(),
-            syn::Lit::Char(_) => todo!(),
-            syn::Lit::Int(_) => todo!(),
-            syn::Lit::Float(_) => todo!(),
-            syn::Lit::Bool(_) => todo!(),
-            syn::Lit::Verbatim(_) => todo!(),
+            syn::Lit::ByteStr(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Byte(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Char(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Int(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Float(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Bool(_) => panic!("IN TOKEN MATCH!"),
+            syn::Lit::Verbatim(_) => panic!("IN TOKEN MATCH!"),
         },
     };
 
@@ -48,16 +50,52 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let new_get_body = if is_body_args {
+    #[allow(unused_assignments)]
+    let mut return_type_str = String::new();
+
+    match return_type {
+        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
+        syn::ReturnType::Type(_, value) => match *value.clone() {
+            syn::Type::Path(stream) => {
+                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
+            }
+            _ => return_type_str = "NO RETURN TYPE!".to_string(),
+        },
+    };
+
+    let is_ret_type_res = if return_type_str == "Response" {
+        true
+    } else {
+        false
+    };
+
+    let new_get_body = if is_ret_type_res {
         quote! {
+            let mut get_route = GetRouteWithReqAndRes::new()
+                .set_path(#path.into());
+
+            fn body(#body_args) -> Response {
+                #body.into()
+            }
+
+            get_route = get_route.set_body(body);
+        }
+    } else if is_body_args {
+        quote! {
+            let mut get_route = GetRouteWithReq::new()
+                .set_path(#path.into());
+
             fn body(#body_args) -> Vec<u8> {
                 #body.into()
             }
 
-            get_route = get_route.set_body_with(body);
+            get_route = get_route.set_body(body);
         }
     } else {
         quote! {
+            let mut get_route = BasicGetRoute::new()
+                .set_path(#path.into());
+
             fn body() -> Vec<u8> {
                 #body.into()
             }
@@ -68,12 +106,14 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let output = quote! {
         fn #name() -> Box<dyn Route> {
-            let mut get_route = GetRoute::new()
+            /*let mut get_route = GetRoute::new()
                 .set_path(#path.into())
-                .set_is_args(#is_body_args);
+                .set_is_args(#is_body_args)
+                .set_is_ret_res(#is_ret_type_res);*/
 
-            #new_wildcard
+
             #new_get_body
+            #new_wildcard
 
             Box::new(get_route)
         }
@@ -91,24 +131,25 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_args = item.sig.inputs;
     let name = item.sig.ident.clone();
     let body = item.block.deref();
+    let return_type = item.sig.output;
 
     let path_token = args[0].clone();
     let is_body_args = !fn_args.is_empty();
 
     let mut path;
     match path_token.clone() {
-        syn::NestedMeta::Meta(_) => todo!(),
+        syn::NestedMeta::Meta(_) => panic!("IN MATCH RETURN TYPE!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
                 path = e.value();
             }
-            syn::Lit::ByteStr(_) => todo!(),
-            syn::Lit::Byte(_) => todo!(),
-            syn::Lit::Char(_) => todo!(),
-            syn::Lit::Int(_) => todo!(),
-            syn::Lit::Float(_) => todo!(),
-            syn::Lit::Bool(_) => todo!(),
-            syn::Lit::Verbatim(_) => todo!(),
+            syn::Lit::ByteStr(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Byte(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Char(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Int(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Float(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Bool(_) => panic!("IN MATCH RETURN TYPE!"),
+            syn::Lit::Verbatim(_) => panic!("IN MATCH RETURN TYPE!"),
         },
     };
     let new_wildcard = if path.contains("/:") {
@@ -124,16 +165,52 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let new_post_body = if is_body_args {
+    #[allow(unused_assignments)]
+    let mut return_type_str = String::new();
+
+    match return_type {
+        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
+        syn::ReturnType::Type(_, value) => match *value.clone() {
+            syn::Type::Path(stream) => {
+                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
+            }
+            _ => return_type_str = "NO RETURN TYPE!".to_string(),
+        },
+    };
+
+    let is_ret_type_res = if return_type_str == "Response" {
+        true
+    } else {
+        false
+    };
+
+    let new_post_body = if is_ret_type_res {
         quote! {
+            let mut post_route = PostRouteWithReqAndRes::new()
+                .set_path(#path.into());
+
+            fn body(#fn_args) -> Response {
+                #body.into()
+            }
+
+            post_route = post_route.set_body(body);
+        }
+    } else if is_body_args {
+        quote! {
+            let mut post_route = PostRouteWithReq::new()
+                .set_path(#path.into());
+
             fn body(#fn_args) -> Vec<u8> {
                 #body.into()
             }
 
-            post_route = post_route.set_body_with(body);
+            post_route = post_route.set_body(body);
         }
     } else {
         quote! {
+            let mut post_route = BasicPostRoute::new()
+                .set_path(#path.into());
+
             fn body() -> Vec<u8> {
                 #body.into()
             }
@@ -141,14 +218,16 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             post_route = post_route.set_body(body);
         }
     };
-    let output = quote! {
-        fn #name() -> Box<Route> {
-            let mut post_route = PostRoute::new()
-                .set_path(#path.into())
-                .set_is_args(#is_body_args);
 
-            #new_wildcard
+    let output = quote! {
+        fn #name() -> Box<dyn Route> {
+            /*let mut post_route = PostRoute::new()
+                .set_path(#path.into())
+                .set_is_args(#is_body_args)
+                .set_is_ret_res(#is_ret_type_res);*/
+
             #new_post_body
+            #new_wildcard
 
             Box::new(post_route)
         }

@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp"
-version = "0.2.7"
+version = "0.3.0"
 edition = "2021"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 license = "GPL-2.0-or-later"
@@ -11,21 +11,21 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-criterion = "0.3"
-reqwest = { version = "*", features = ["blocking"] }
-log = "*"
+criterion = "0.4.0"
+reqwest = { version = "0.11.11", features = ["blocking"] }
+log = "0.4.17"
 
 [[bench]]
 name = "create_req"
 harness = false
 
 [dependencies]
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.2.6", default-features = false }
-tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.2.5" }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.3.0", default-features = false }
+tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.3.0" }
 
 [features]
 default = ["ssl", "sys", "log"]
-async = ["tinyhttp-internal/async"]
+#async = ["tinyhttp-internal/async"]
 openssl_vendor = ["tinyhttp-internal/openssl_vendor"]
 ssl = ["tinyhttp-internal/ssl"]
 sys = ["tinyhttp-internal/sys"]

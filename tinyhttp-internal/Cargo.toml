@@ -6,18 +6,21 @@ keywords = ["http", "server"]
 license = "GPL-2.0-or-later"
 name = "tinyhttp-internal"
 repository = "https://github.com/mateocabanal/tinyhttp-internal"
-version = "0.2.6"
+version = "0.3.0"
 
 [dependencies]
 mime_guess = "2.0.4"
 openssl = { version = "0.10.40", optional = true }
 dyn-clone = "1.0.6"
-infer = "0.9.0"
+infer = "0.12.0"
 lazy_static = "1.4.0"
-simple_logger = { version = "2.1.0", optional = true }
+simple_logger = { version = "4.0.0", optional = true }
 num_cpus = "1.13.1"
-async-std = { version = "1.12.0", features = ["attributes"], optional = true }
-futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
+rusty_pool = "0.7.0"
+
+
+#async-std = { version = "1.12.0", features = ["attributes"], optional = true }
+#futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
 
 [dependencies.flate2]
 features = ["miniz-sys"]
@@ -32,7 +35,7 @@ optional = true
 [features]
 default = ["sys", "log"]
 openssl_vendor = ["ssl", "openssl?/vendored"]
-async = ["dep:async-std", "dep:futures"]
+#async = ["dep:async-std", "dep:futures"]
 ssl = ["dep:openssl"]
 sys = ["ssl", "dep:flate2"]
 log = ["dep:simple_logger", "dep:log"]
