@@ -348,7 +348,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         brw.headers
             .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
 
-        response.borrow_mut().send_http_2(conn);
+        brw.send_http_2(conn);
         return;
     }
 
@@ -376,7 +376,7 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     inner(path.as_ref())
 }
 
-fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
+pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
     let buffer_size = 512;
     let mut request_buffer = vec![];
     loop {

@@ -3,7 +3,10 @@ use std::{
     io::{Read, Write},
 };
 
-use crate::http2::frame::HTTP2Frame;
+use crate::{
+    http::read_stream,
+    http2::{connection::parse_data_frame, frame::HTTP2Frame},
+};
 
 #[derive(Clone, Debug)]
 pub struct Response {
@@ -84,9 +87,23 @@ impl Response {
     }
 
     pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {
+        sock.write_all(
+            b"HTTP/1.1 101 Switching Protocols \r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n",
+        );
         let mut payload = Vec::new();
-        payload.push(0u8);
+        payload.append(&mut vec![0u8]);
         let frame = HTTP2Frame::new().frame_type(4).payload(payload);
         sock.write_all(&frame.to_vec()).unwrap();
+
+        let buf = read_stream(sock);
+        let frame = parse_data_frame(&buf).unwrap();
+
+        sock.write_all(
+            &HTTP2Frame::new()
+                .frame_type(0)
+                .stream_id(0)
+                .payload(b"HELLO!".to_vec())
+                .to_vec(),
+        );
     }
 }
