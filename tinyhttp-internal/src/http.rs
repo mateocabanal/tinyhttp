@@ -26,9 +26,9 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
+    http2::{self},
     request::Request,
     response::Response,
-    http2::HttpFrame
 };
 
 #[cfg(not(feature = "async"))]
@@ -63,6 +63,9 @@ pub(crate) fn start_http(http: HttpListener) {
 }
 
 fn build_and_parse_req(buf: Vec<u8>) -> Request {
+    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+        http2::connection::parse_data_frame(&buf).unwrap();
+    }
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -331,6 +334,18 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
         #[cfg(feature = "log")]
         log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
+    }
+
+    let mut upgrade = String::from("");
+    if req_headers.contains_key("connection") {
+        upgrade = req_headers.get("connection").unwrap().to_string();
+
+        let mut brw = response.borrow_mut();
+        brw.headers
+            .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
+
+        brw.headers
+            .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
     }
 
     #[cfg(feature = "log")]

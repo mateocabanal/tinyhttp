@@ -47,7 +47,7 @@ fn get_return_res(res: Request) -> Response {
 }
 
 fn main() {
-    let socket = TcpListener::bind(":::9001").unwrap();
+    let socket = TcpListener::bind("0.0.0.0:9001").unwrap();
     let routes = Routes::new(vec![
         get(),
         post(),

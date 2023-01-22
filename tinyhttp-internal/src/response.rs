@@ -80,4 +80,6 @@ impl Response {
 
         sock.write_all(&full_req).unwrap();
     }
+
+    pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {}
 }
