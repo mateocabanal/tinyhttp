@@ -336,17 +336,20 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
     }
 
-    let mut upgrade = String::from("");
-    if req_headers.contains_key("connection") {
-        upgrade = req_headers.get("connection").unwrap().to_string();
+    // let mut upgrade = String::from("");
+    // if req_headers.contains_key("connection") {
+    //     upgrade = req_headers.get("connection").unwrap().to_string();
 
-        let mut brw = response.borrow_mut();
-        brw.headers
-            .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
+    //     let mut brw = response.borrow_mut();
+    //     brw.headers
+    //         .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
 
-        brw.headers
-            .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
-    }
+    //     brw.headers
+    //         .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
+
+    //     response.borrow_mut().send_http_2(conn);
+    //     return;
+    // }
 
     #[cfg(feature = "log")]
     {

@@ -3,6 +3,8 @@ use std::{
     io::{Read, Write},
 };
 
+use crate::http2::frame::HTTP2Frame;
+
 #[derive(Clone, Debug)]
 pub struct Response {
     pub headers: HashMap<String, String>,
@@ -81,5 +83,10 @@ impl Response {
         sock.write_all(&full_req).unwrap();
     }
 
-    pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {}
+    pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {
+        let mut payload = Vec::new();
+        payload.push(0u8);
+        let frame = HTTP2Frame::new().frame_type(4).payload(payload);
+        sock.write_all(&frame.to_vec()).unwrap();
+    }
 }
