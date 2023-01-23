@@ -1,12 +1,40 @@
 use super::frame::HTTP2Frame;
 
+pub(crate) fn parse_buffer_to_frames(data_arr: &[u8]) -> Vec<HTTP2Frame> {
+    let mut http2_frames = Vec::new();
+    let mut it = 0;
+    while it < data_arr.len() {
+        let mut frame_len = 9 + u32::from_be_bytes(
+            [vec![0u8], data_arr[it..=it + 2].to_vec()]
+                .concat()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+        let frame =
+            parse_data_frame(&data_arr[it..(it as u32 + frame_len).try_into().unwrap()]).unwrap();
+
+        #[cfg(feature = "log")]
+        log::trace!(
+            "PARSED FRAME TYPE + LEN: {}, {}",
+            frame.get_frame_type_as_u8(),
+            frame.clone().to_vec().len()
+        );
+
+        http2_frames.push(frame);
+        it += frame_len as usize;
+    }
+
+    http2_frames
+}
+
 pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn std::error::Error>> {
     let data = data_arr.to_vec();
     // log::trace!(
     //     "HTTP2 -> FIRST 24 bytes: {}",
     //     std::str::from_utf8(&data[0..=23]).unwrap()
     // );
-    // log::trace!("HTTP2 -> ENTIRE FRAME IN u8: {:#?}", data);
+    log::trace!("HTTP2 -> ENTIRE FRAME IN u8: {:#?}", data);
     //let length: u32 = u32::from_be_bytes(data[0..2].try_into()?);
     let length_vec: Vec<u8> = data[0..=2].to_vec();
     let length: u32 = u32::from_be_bytes([vec![0u8], length_vec].concat().as_slice().try_into()?);
@@ -42,7 +70,7 @@ pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn st
 
     let payload = &data[9..length as usize + 9];
 
-    log::debug!("HTTP2 -> PAYLOAD:{}", std::str::from_utf8(payload).unwrap());
+    //log::debug!("HTTP2 -> PAYLOAD:{}", std::str::from_utf8(payload).unwrap());
 
     Ok(HTTP2Frame::new()
         .frame_type(frame_type)

@@ -6,7 +6,7 @@ use std::{
 use crate::{
     http::read_stream,
     http2::{
-        connection::parse_data_frame,
+        connection::{parse_buffer_to_frames, parse_data_frame},
         frame::{HTTP2Frame, HTTP2FrameType},
     },
 };
@@ -111,34 +111,41 @@ impl Response {
         while !term {
             let mut buf = read_stream(sock);
             if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
-                log::trace!("REMOVING PREFACE...");
+                log::trace!("REMOVING PREFACE...: {:?}", buf);
                 buf.drain(0..=23);
+                continue;
             }
-            let frame = parse_data_frame(&buf).unwrap();
+            let frames = parse_buffer_to_frames(&buf);
 
-            match frame.get_frame_type() {
-                HTTP2FrameType::Data => {
-                    todo!()
-                }
-                HTTP2FrameType::Headers => todo!(),
-                HTTP2FrameType::Priority => todo!(),
-                HTTP2FrameType::RST_STREAM => todo!(),
-                HTTP2FrameType::Settings => {
-                    log::trace!("SETTINGS FRAME RECV!");
-                    if frame.get_flags() != 1 {
-                        let settings_frame = HTTP2Frame::new().frame_type(4).flags(1).stream_id(0);
-                        sock.write_all(&settings_frame.to_vec()).unwrap();
-                        log::trace!("SENT SETTINGS FRAME!");
+            for frame in frames {
+                match frame.get_frame_type() {
+                    HTTP2FrameType::Data => {
+                        todo!()
                     }
+                    HTTP2FrameType::Headers => todo!(),
+                    HTTP2FrameType::Priority => todo!(),
+                    HTTP2FrameType::RST_STREAM => todo!(),
+                    HTTP2FrameType::Settings => {
+                        log::trace!("SETTINGS FRAME RECV!");
+                        if frame.get_flags() != 1 {
+                            let settings_frame =
+                                HTTP2Frame::new().frame_type(4).flags(1).stream_id(0);
+                            sock.write_all(&settings_frame.to_vec()).unwrap();
+                            log::trace!("SENT SETTINGS FRAME!");
+                        }
+                    }
+                    HTTP2FrameType::PUSH_PROMISE => todo!(),
+                    HTTP2FrameType::Ping => todo!(),
+                    HTTP2FrameType::GO_AWAY => {
+                        log::trace!("GO_AWAY FRAME RECV!");
+                        term = true;
+                    }
+                    HTTP2FrameType::WINDOW_UPDATE => {
+                        #[cfg(feature = "log")]
+                        log::trace!("WINDOW_UPDATE FRAME RECV!");
+                    }
+                    HTTP2FrameType::Continuation => todo!(),
                 }
-                HTTP2FrameType::PUSH_PROMISE => todo!(),
-                HTTP2FrameType::Ping => todo!(),
-                HTTP2FrameType::GO_AWAY => {
-                    log::trace!("GO_AWAY FRAME RECV!");
-                    term = true;
-                }
-                HTTP2FrameType::WINDOW_UPDATE => todo!(),
-                HTTP2FrameType::Continuation => todo!(),
             }
         }
     }

@@ -377,7 +377,7 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 }
 
 pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 4096;
+    let buffer_size = 512;
     let mut request_buffer = vec![];
     loop {
         let mut buffer = vec![0; buffer_size];
