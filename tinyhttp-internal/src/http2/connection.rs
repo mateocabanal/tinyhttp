@@ -1,16 +1,14 @@
 use super::frame::HTTP2Frame;
 
 pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn std::error::Error>> {
-    let mut data = data_arr.to_vec();
-    log::trace!(
-        "HTTP2 -> FIRST 24 bytes: {}",
-        std::str::from_utf8(&data[0..=23]).unwrap()
-    );
-    data.drain(0..=23);
-    log::trace!("HTTP2 -> ENTIRE FRAME IN u8: {:#?}", data);
+    let data = data_arr.to_vec();
+    // log::trace!(
+    //     "HTTP2 -> FIRST 24 bytes: {}",
+    //     std::str::from_utf8(&data[0..=23]).unwrap()
+    // );
+    // log::trace!("HTTP2 -> ENTIRE FRAME IN u8: {:#?}", data);
     //let length: u32 = u32::from_be_bytes(data[0..2].try_into()?);
-    let mut length_vec: Vec<u8> = data[0..=3].to_vec();
-    length_vec.pop();
+    let length_vec: Vec<u8> = data[0..=2].to_vec();
     let length: u32 = u32::from_be_bytes([vec![0u8], length_vec].concat().as_slice().try_into()?);
     log::trace!("HTTP2 -> LENGTH: {}", length);
     let frame_type = data[3];
@@ -42,12 +40,13 @@ pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn st
     //     return Err("Invalid stream id".into());
     // }
 
-    let payload = &data[9..=length as usize];
+    let payload = &data[9..length as usize + 9];
 
     log::debug!("HTTP2 -> PAYLOAD:{}", std::str::from_utf8(payload).unwrap());
 
     Ok(HTTP2Frame::new()
         .frame_type(frame_type)
+        .flags(flags)
         .payload(payload.to_vec())
         .stream_id(stream_id))
 }
