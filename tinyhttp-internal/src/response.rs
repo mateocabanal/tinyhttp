@@ -109,13 +109,12 @@ impl Response {
         let mut term = false;
 
         while !term {
-            let mut buf = read_stream(sock);
-            if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
-                log::trace!("REMOVING PREFACE...: {:?}", buf);
-                buf.drain(0..=23);
-                continue;
-            }
-            let frames = parse_buffer_to_frames(&buf);
+            let buf = read_stream(sock);
+
+            #[cfg(feature = "log")]
+            log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
+
+            let frames = parse_buffer_to_frames(buf);
 
             for frame in frames {
                 match frame.get_frame_type() {
@@ -128,8 +127,18 @@ impl Response {
                     HTTP2FrameType::Settings => {
                         log::trace!("SETTINGS FRAME RECV!");
                         if frame.get_flags() != 1 {
-                            let settings_frame =
-                                HTTP2Frame::new().frame_type(4).flags(1).stream_id(0);
+                            let payload = frame.get_payload().unwrap();
+                            let id = u16::from_be_bytes(payload[0..=1].try_into().unwrap());
+                            let value = u32::from_be_bytes(payload[2..=5].try_into().unwrap());
+
+                            #[cfg(feature = "log")]
+                            log::trace!("SETTINGS --> ID: {}, VALUE: {}", id, value);
+
+                            let settings_frame = HTTP2Frame::new()
+                                .frame_type(4)
+                                .flags(1)
+                                .stream_id(0)
+                                .payload([3u8.to_be_bytes(), 100u8.to_be_bytes()].concat());
                             sock.write_all(&settings_frame.to_vec()).unwrap();
                             log::trace!("SENT SETTINGS FRAME!");
                         }
@@ -137,12 +146,21 @@ impl Response {
                     HTTP2FrameType::PUSH_PROMISE => todo!(),
                     HTTP2FrameType::Ping => todo!(),
                     HTTP2FrameType::GO_AWAY => {
-                        log::trace!("GO_AWAY FRAME RECV!");
+                        let mut payload = frame.get_payload().unwrap();
+                        payload[0] = payload[0] & 0xE;
+                        let err_code = u32::from_be_bytes(payload.try_into().unwrap());
+
+                        #[cfg(feature = "log")]
+                        log::trace!("GO_AWAY FRAME RECV!: {}", err_code);
+
                         term = true;
                     }
                     HTTP2FrameType::WINDOW_UPDATE => {
+                        let payload = frame.get_payload().unwrap();
+                        let window_inc = u32::from_be_bytes(payload.try_into().unwrap());
+
                         #[cfg(feature = "log")]
-                        log::trace!("WINDOW_UPDATE FRAME RECV!");
+                        log::trace!("WINDOW_UPDATE FRAME RECV!, window_inc: {}", window_inc);
                     }
                     HTTP2FrameType::Continuation => todo!(),
                 }

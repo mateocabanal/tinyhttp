@@ -1,10 +1,14 @@
 use super::frame::HTTP2Frame;
 
-pub(crate) fn parse_buffer_to_frames(data_arr: &[u8]) -> Vec<HTTP2Frame> {
+pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<HTTP2Frame> {
     let mut http2_frames = Vec::new();
     let mut it = 0;
+    if data_arr.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+        log::trace!("REMOVING PREFACE...: {:?}", data_arr);
+        data_arr.drain(0..=23);
+    }
     while it < data_arr.len() {
-        let mut frame_len = 9 + u32::from_be_bytes(
+        let frame_len = 9 + u32::from_be_bytes(
             [vec![0u8], data_arr[it..=it + 2].to_vec()]
                 .concat()
                 .as_slice()
