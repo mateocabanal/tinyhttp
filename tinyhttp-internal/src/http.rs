@@ -392,7 +392,10 @@ pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
                     request_buffer.append(&mut buffer);
                 }
             }
-            Err(_) => println!("Error: Could not read string!"),
+            Err(e) => {
+                println!("Error: Could not read string!: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 

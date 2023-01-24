@@ -30,12 +30,16 @@ impl HTTP2Frame {
             flags: Some(0),
             reserved: Some(0),
             stream_id: Some(0),
-            payload: Some(Vec::new()),
+            payload: None,
         }
     }
 
     pub fn get_flags(&self) -> u8 {
         self.flags.unwrap()
+    }
+
+    pub fn get_payload(&self) -> Option<Vec<u8>> {
+        self.payload.clone()
     }
 
     pub fn get_frame_type(&self) -> HTTP2FrameType {
