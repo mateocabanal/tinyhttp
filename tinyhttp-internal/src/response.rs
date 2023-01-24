@@ -114,9 +114,9 @@ impl Response {
             #[cfg(feature = "log")]
             log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
 
-            let frames = parse_buffer_to_frames(buf);
+            let mut frames = parse_buffer_to_frames(buf);
 
-            for frame in frames {
+            for frame in &frames {
                 match frame.get_frame_type() {
                     HTTP2FrameType::Data => {
                         todo!()
@@ -138,7 +138,7 @@ impl Response {
                                 .frame_type(4)
                                 .flags(1)
                                 .stream_id(0)
-                                .payload([3u8.to_be_bytes(), 100u8.to_be_bytes()].concat());
+                                .payload(vec![0u8; 5]);
                             sock.write_all(&settings_frame.to_vec()).unwrap();
                             log::trace!("SENT SETTINGS FRAME!");
                         }
@@ -148,7 +148,7 @@ impl Response {
                     HTTP2FrameType::GO_AWAY => {
                         let mut payload = frame.get_payload().unwrap();
                         payload[0] = payload[0] & 0xE;
-                        let err_code = u32::from_be_bytes(payload.try_into().unwrap());
+                        let err_code = u32::from_be_bytes(payload[4..=7].try_into().unwrap());
 
                         #[cfg(feature = "log")]
                         log::trace!("GO_AWAY FRAME RECV!: {}", err_code);
@@ -165,6 +165,7 @@ impl Response {
                     HTTP2FrameType::Continuation => todo!(),
                 }
             }
+            frames.remove(0);
         }
     }
 }
