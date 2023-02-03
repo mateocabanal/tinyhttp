@@ -109,4 +109,13 @@ impl Request {
     pub fn get_wildcard(&self) -> Option<&String> {
         self.wildcard.as_ref()
     }
+
+    pub fn get_http2(&self) -> bool {
+        self.is_http2
+    }
+
+    pub fn set_http2(mut self, w: bool) -> Self {
+        self.is_http2 = w;
+        self
+    }
 }

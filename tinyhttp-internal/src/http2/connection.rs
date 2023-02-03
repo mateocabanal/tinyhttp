@@ -1,6 +1,8 @@
+use crate::http2::frame::*;
+
 use super::frame::HTTP2Frame;
 
-pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<HTTP2Frame> {
+pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<Box<dyn HTTP2Frame>> {
     let mut http2_frames = Vec::new();
     let mut it = 0;
     if data_arr.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
@@ -18,12 +20,12 @@ pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<HTTP2Frame> {
         let frame =
             parse_data_frame(&data_arr[it..(it as u32 + frame_len).try_into().unwrap()]).unwrap();
 
-        #[cfg(feature = "log")]
-        log::trace!(
-            "PARSED FRAME TYPE + LEN: {}, {}",
-            frame.get_frame_type_as_u8(),
-            frame.clone().to_vec().len()
-        );
+        // #[cfg(feature = "log")]
+        // log::trace!(
+        //     "PARSED FRAME TYPE + LEN: {}, {}",
+        //     frame.get_frame_type_as_u8(),
+        //     frame.clone().to_vec().len()
+        // );
 
         http2_frames.push(frame);
         it += frame_len as usize;
@@ -32,7 +34,9 @@ pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<HTTP2Frame> {
     http2_frames
 }
 
-pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn std::error::Error>> {
+pub(crate) fn parse_data_frame(
+    data_arr: &[u8],
+) -> Result<Box<dyn HTTP2Frame>, Box<dyn std::error::Error>> {
     let data = data_arr.to_vec();
     // log::trace!(
     //     "HTTP2 -> FIRST 24 bytes: {}",
@@ -76,9 +80,78 @@ pub(crate) fn parse_data_frame(data_arr: &[u8]) -> Result<HTTP2Frame, Box<dyn st
 
     //log::debug!("HTTP2 -> PAYLOAD:{}", std::str::from_utf8(payload).unwrap());
 
-    Ok(HTTP2Frame::new()
-        .frame_type(frame_type)
-        .flags(flags)
-        .payload(payload.to_vec())
-        .stream_id(stream_id))
+    match frame_type {
+        0 => Ok(Box::new(
+            DataFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        1 => Ok(Box::new(
+            HeadersFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        2 => Ok(Box::new(
+            PriorityFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        3 => Ok(Box::new(
+            RSTFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        4 => Ok(Box::new(
+            SettingsFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        5 => Ok(Box::new(
+            PushFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        6 => Ok(Box::new(
+            PingFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        7 => Ok(Box::new(
+            GoAwayFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        8 => Ok(Box::new(
+            WindowUpdateFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+        9 => Ok(Box::new(
+            ContinuationFrame::new()
+                .frame_type(frame_type)
+                .flags(flags)
+                .payload(payload.to_vec())
+                .stream_id(stream_id),
+        )),
+
+        _ => Err("not a frame type".into()),
+    }
 }
