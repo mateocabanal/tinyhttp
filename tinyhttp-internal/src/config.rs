@@ -205,19 +205,6 @@ impl Config {
     pub fn new() -> Config {
         //assert!(routes.len() > 0);
 
-        #[cfg(feature = "log")]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Warn)
-            .env();
-
-        #[cfg(all(debug_assertions, feature = "log"))]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Trace)
-            .env();
-
-        #[cfg(feature = "log")]
-        logger.init().unwrap();
-
         Config {
             mount_point: None,
             get_routes: None,
