@@ -321,12 +321,11 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         #[cfg(feature = "log")]
         log::debug!("GZIP ENABLED!");
         let start: Instant = std::time::Instant::now();
-        let body = response.borrow_mut().body.clone();
+        let body = res_brw.body.clone();
         let mut writer = GzEncoder::new(Vec::new(), Compression::default());
         writer.write_all(&body.unwrap()).unwrap();
-        response.borrow_mut().body = Some(writer.finish().unwrap());
-        response
-            .borrow_mut()
+        res_brw.body = Some(writer.finish().unwrap());
+        res_brw
             .headers
             .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
         #[cfg(feature = "log")]

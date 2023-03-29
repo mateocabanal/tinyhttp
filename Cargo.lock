@@ -1190,7 +1190,6 @@ dependencies = [
  "num_cpus",
  "openssl",
  "rusty_pool",
- "simple_logger",
 ]
 
 [[package]]
