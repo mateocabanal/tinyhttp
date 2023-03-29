@@ -172,6 +172,7 @@ pub struct Config {
     br: bool,
     gzip: bool,
     spa: bool,
+    http2: bool,
 }
 
 impl Default for Config {
@@ -204,19 +205,6 @@ impl Config {
     pub fn new() -> Config {
         //assert!(routes.len() > 0);
 
-        #[cfg(feature = "log")]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Warn)
-            .env();
-
-        #[cfg(all(debug_assertions, feature = "log"))]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Trace)
-            .env();
-
-        #[cfg(feature = "log")]
-        logger.init().unwrap();
-
         Config {
             mount_point: None,
             get_routes: None,
@@ -229,6 +217,7 @@ impl Config {
             gzip: false,
             br: false,
             spa: false,
+            http2: false,
         }
     }
 
@@ -362,6 +351,13 @@ impl Config {
         self.gzip = res;
         self
     }
+
+    pub fn http2(mut self, res: bool) -> Self {
+        self.http2 = res;
+        self
+    }
+
+
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }

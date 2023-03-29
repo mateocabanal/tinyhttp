@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp-codegen"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 edition = "2018"
 license = "GPL-2.0-or-later"

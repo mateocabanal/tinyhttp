@@ -63,9 +63,9 @@ pub(crate) fn start_http(http: HttpListener) {
 }
 
 fn build_and_parse_req(buf: Vec<u8>) -> Request {
-    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
-        http2::connection::parse_data_frame(&buf).unwrap();
-    }
+    #[cfg(feature = "log")]
+    log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
+
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -273,9 +273,11 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let mut request = build_and_parse_req(buf);
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
-    let mime = response.borrow_mut().mime.clone().unwrap();
 
-    let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
+    let mut res_brw = response.borrow_mut();
+    let mime = res_brw.mime.clone().unwrap();
+
+    let inferred_mime = match infer::get(res_brw.body.as_ref().unwrap()) {
         Some(mime) => mime.mime_type().to_string(),
         None => mime,
     };
@@ -283,22 +285,17 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     match config.get_headers() {
         Some(vec) => {
             for (i, j) in vec.iter() {
-                response
-                    .borrow_mut()
-                    .headers
-                    .insert(i.to_string(), j.to_string());
+                res_brw.headers.insert(i.to_string(), j.to_string());
             }
         }
         None => (),
     }
 
-    response
-        .borrow_mut()
+    res_brw
         .headers
         .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
 
-    response
-        .borrow_mut()
+    res_brw
         .headers
         .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
 
@@ -324,44 +321,27 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         #[cfg(feature = "log")]
         log::debug!("GZIP ENABLED!");
         let start: Instant = std::time::Instant::now();
-        let body = response.borrow_mut().body.clone();
+        let body = res_brw.body.clone();
         let mut writer = GzEncoder::new(Vec::new(), Compression::default());
         writer.write_all(&body.unwrap()).unwrap();
-        response.borrow_mut().body = Some(writer.finish().unwrap());
-        response
-            .borrow_mut()
+        res_brw.body = Some(writer.finish().unwrap());
+        res_brw
             .headers
             .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
         #[cfg(feature = "log")]
         log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
     }
 
-    // let mut upgrade = String::from("");
-    // if req_headers.contains_key("connection") {
-    //     upgrade = req_headers.get("connection").unwrap().to_string();
-
-    //     let mut brw = response.borrow_mut();
-    //     brw.headers
-    //         .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
-
-    //     brw.headers
-    //         .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
-
-    //     response.borrow_mut().send_http_2(conn);
-    //     return;
-    // }
-
     #[cfg(feature = "log")]
     {
-        let brw = response.borrow_mut();
         log::debug!(
             "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-            brw.body.as_ref().unwrap(),
-            brw.headers,
+            res_brw.body.as_ref().unwrap(),
+            res_brw.headers,
         );
     }
 
-    response.borrow_mut().send(conn);
+    res_brw.send(conn);
 }
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
@@ -375,7 +355,7 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     inner(path.as_ref())
 }
 
-fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
+pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
     let buffer_size = 512;
     let mut request_buffer = vec![];
     loop {
@@ -391,7 +371,10 @@ fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
                     request_buffer.append(&mut buffer);
                 }
             }
-            Err(_) => println!("Error: Could not read string!"),
+            Err(e) => {
+                println!("Error: Could not read string!: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 

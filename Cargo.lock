@@ -1158,18 +1158,19 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "criterion",
  "log",
  "reqwest",
+ "simple_logger",
  "tinyhttp-codegen",
  "tinyhttp-internal",
 ]
 
 [[package]]
 name = "tinyhttp-codegen"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "quote",
  "syn",
@@ -1178,7 +1179,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp-internal"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dyn-clone",
  "flate2",
@@ -1189,7 +1190,6 @@ dependencies = [
  "num_cpus",
  "openssl",
  "rusty_pool",
- "simple_logger",
 ]
 
 [[package]]
