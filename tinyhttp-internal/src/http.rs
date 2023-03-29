@@ -66,9 +66,11 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     #[cfg(feature = "log")]
     log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
 
-    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") || cfg!(debug_assertions) {
+    #[cfg(feature = "http2")]
+    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") && cfg!(debug_assertions) {
         return Request::new(vec![], vec![], vec![], None).set_http2(true);
     }
+
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -283,13 +285,13 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
 
-    let res_brw = response.borrow_mut();
-    if res_brw.http2 {
-        res_brw.send_http_2(conn);
+    if response.borrow().http2 {
+        response.borrow_mut().send_http_2(conn);
+        return;
     }
-    let mime = response.borrow_mut().mime.clone().unwrap();
+    let mime = response.borrow().mime.clone().unwrap();
 
-    let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
+    let inferred_mime = match infer::get(response.borrow().body.as_ref().unwrap()) {
         Some(mime) => mime.mime_type().to_string(),
         None => mime,
     };
@@ -351,7 +353,12 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     }
 
     let mut upgrade = String::from("");
+
+    #[cfg(feature = "http2")]
     if req_headers.contains_key("connection") {
+        #[cfg(feature = "log")]
+        log::trace!("parse_request: found connection header, upgrading to http/2");
+
         upgrade = req_headers.get("connection").unwrap().to_string();
 
         let mut brw = response.borrow_mut();

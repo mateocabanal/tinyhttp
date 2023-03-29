@@ -121,9 +121,12 @@ impl Response {
             let buf = read_stream(sock);
 
             #[cfg(feature = "log")]
-            log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
+            //log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
 
             let mut frames = parse_buffer_to_frames(buf);
+            
+            #[cfg(feature = "log")]
+//         log::trace!("frames: {:#?}", frames);
 
             while !frames.is_empty() {
                 for frame in frames.clone() {
@@ -185,7 +188,7 @@ impl Response {
                         }
                         HTTP2FrameType::Continuation => todo!(),
                     }
-                    frames.remove(0);
+                    //frames.remove(0);
                 }
             }
         }
