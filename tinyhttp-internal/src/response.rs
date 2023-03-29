@@ -3,9 +3,6 @@ use std::{
     io::{Read, Write},
 };
 
-use crate::{
-    http::read_stream,
-};
 
 
 #[derive(Clone, Debug)]
