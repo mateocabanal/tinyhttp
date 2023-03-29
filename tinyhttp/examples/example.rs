@@ -47,6 +47,8 @@ fn get_return_res(res: Request) -> Response {
 }
 
 fn main() {
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Debug).env().init();
+
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![
         get(),

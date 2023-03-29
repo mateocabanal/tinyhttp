@@ -1163,6 +1163,7 @@ dependencies = [
  "criterion",
  "log",
  "reqwest",
+ "simple_logger",
  "tinyhttp-codegen",
  "tinyhttp-internal",
 ]

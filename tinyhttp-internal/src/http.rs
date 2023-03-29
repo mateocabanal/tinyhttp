@@ -66,9 +66,6 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     #[cfg(feature = "log")]
     log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
 
-    if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") || cfg!(debug_assertions) {
-        return Request::new(vec![], vec![], vec![], None).set_http2(true);
-    }
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -148,11 +145,6 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 }
 
 fn build_res(req: &mut Request, config: &Config) -> Response {
-    if req.get_http2() {
-        let mut response = Response::new();
-        response.http2 = true;
-        return response;
-    }
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
@@ -277,19 +269,15 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
 }
 
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let is_http2_check = conn.bytes().map(|x| x.unwrap());
     let buf = read_stream(conn);
     let mut request = build_and_parse_req(buf);
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
 
-    let res_brw = response.borrow_mut();
-    if res_brw.http2 {
-        res_brw.send_http_2(conn);
-    }
-    let mime = response.borrow_mut().mime.clone().unwrap();
+    let mut res_brw = response.borrow_mut();
+    let mime = res_brw.mime.clone().unwrap();
 
-    let inferred_mime = match infer::get(response.borrow_mut().body.as_ref().unwrap()) {
+    let inferred_mime = match infer::get(res_brw.body.as_ref().unwrap()) {
         Some(mime) => mime.mime_type().to_string(),
         None => mime,
     };
@@ -297,22 +285,17 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     match config.get_headers() {
         Some(vec) => {
             for (i, j) in vec.iter() {
-                response
-                    .borrow_mut()
-                    .headers
-                    .insert(i.to_string(), j.to_string());
+                res_brw.headers.insert(i.to_string(), j.to_string());
             }
         }
         None => (),
     }
 
-    response
-        .borrow_mut()
+    res_brw
         .headers
         .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
 
-    response
-        .borrow_mut()
+    res_brw
         .headers
         .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
 
@@ -350,32 +333,16 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
     }
 
-    let mut upgrade = String::from("");
-    if req_headers.contains_key("connection") {
-        upgrade = req_headers.get("connection").unwrap().to_string();
-
-        let mut brw = response.borrow_mut();
-        brw.headers
-            .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
-
-        brw.headers
-            .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
-        brw.send(conn);
-        brw.send_http_2(conn);
-        return;
-    }
-
     #[cfg(feature = "log")]
     {
-        let brw = response.borrow_mut();
         log::debug!(
             "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-            brw.body.as_ref().unwrap(),
-            brw.headers,
+            res_brw.body.as_ref().unwrap(),
+            res_brw.headers,
         );
     }
 
-    response.borrow_mut().send(conn);
+    res_brw.send(conn);
 }
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
