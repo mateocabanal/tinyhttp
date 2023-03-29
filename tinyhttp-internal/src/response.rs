@@ -5,18 +5,8 @@ use std::{
 
 use crate::{
     http::read_stream,
-    http2::{connection::parse_buffer_to_frames, frame::*},
 };
 
-macro_rules! unpack_octets_4 {
-    // TODO: Get rid of this macro
-    ($buf:expr, $offset:expr, $tip:ty) => {
-        (($buf[$offset + 0] as $tip) << 24)
-            | (($buf[$offset + 1] as $tip) << 16)
-            | (($buf[$offset + 2] as $tip) << 8)
-            | (($buf[$offset + 3] as $tip) << 0)
-    };
-}
 
 #[derive(Clone, Debug)]
 pub struct Response {
@@ -98,96 +88,4 @@ impl Response {
         sock.write_all(&full_req).unwrap();
     }
 
-    pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {
-        // sock.write_all(
-        //     b"HTTP/1.1 101 Switching Protocols \r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n",
-        // )
-        // .unwrap();
-        let payload = SettingsFrame::build_payload();
-        let frame = SettingsFrame::new()
-            .frame_type(4)
-            .flags(0)
-            .payload(payload.to_vec())
-            .stream_id(0);
-        sock.write_all(&frame.to_vec()).unwrap();
-
-        //let mut buf = read_stream(sock);
-        //buf.drain(0..=23);
-        //let frame = parse_data_frame(&buf).unwrap();
-
-        let mut term = false;
-
-        while !term {
-            let buf = read_stream(sock);
-
-            #[cfg(feature = "log")]
-            log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
-
-            let mut frames = parse_buffer_to_frames(buf);
-
-            while !frames.is_empty() {
-                for frame in frames.clone() {
-                    match frame.get_frame_type() {
-                        HTTP2FrameType::Data => {
-                            todo!()
-                        }
-                        HTTP2FrameType::Headers => todo!(),
-                        HTTP2FrameType::Priority => todo!(),
-                        HTTP2FrameType::RST_STREAM => todo!(),
-                        HTTP2FrameType::Settings => {
-                            let payload = frame.get_payload().unwrap();
-                            if payload.len() >= 6 {
-                                let id: u16 = (u16::from(payload[0]) << 8) | u16::from(payload[1]);
-                                //let id = u16::from_be_bytes(payload[0..=1].try_into().unwrap());
-                                let value = u32::from_be_bytes(payload[2..=5].try_into().unwrap());
-
-                                #[cfg(feature = "log")]
-                                log::trace!("SETTINGS --> ID: {}, VALUE: {}", id, value);
-                            }
-
-                            #[cfg(feature = "log")]
-                            log::trace!("SETTINGS FRAME RECV!, FLAG: {}", frame.get_flags());
-
-                            if frame.get_flags() != 1 {
-                                let settings_frame = SettingsFrame::new()
-                                    .frame_type(4)
-                                    .flags(1)
-                                    .stream_id(0)
-                                    .payload(vec![0u8; 0]);
-                                sock.write_all(&settings_frame.to_vec()).unwrap();
-                                log::trace!("SENT SETTINGS FRAME!");
-                            }
-                        }
-                        HTTP2FrameType::PUSH_PROMISE => todo!(),
-                        HTTP2FrameType::Ping => todo!(),
-                        HTTP2FrameType::GO_AWAY => {
-                            let mut payload = frame.get_payload().unwrap();
-                            payload[0] = payload[0] & 0xE;
-                            let err_code = u32::from_be_bytes(payload[4..=7].try_into().unwrap());
-
-                            #[cfg(feature = "log")]
-                            log::trace!("GO_AWAY FRAME RECV!: {}", err_code);
-
-                            term = true;
-                        }
-                        HTTP2FrameType::WINDOW_UPDATE => {
-                            let payload = frame.get_payload().unwrap();
-                            if payload.len() >= 4 {
-                                let window_inc =
-                                    u32::from_be_bytes(payload[0..=3].try_into().unwrap());
-
-                                #[cfg(feature = "log")]
-                                log::trace!(
-                                    "WINDOW_UPDATE FRAME RECV!, window_inc: {}",
-                                    window_inc
-                                );
-                            }
-                        }
-                        HTTP2FrameType::Continuation => todo!(),
-                    }
-                    frames.remove(0);
-                }
-            }
-        }
-    }
 }

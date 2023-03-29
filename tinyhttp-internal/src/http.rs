@@ -26,7 +26,6 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
-    http2::{self},
     request::Request,
     response::Response,
 };
@@ -43,6 +42,9 @@ pub(crate) fn start_http(http: HttpListener) {
             #[cfg(feature = "ssl")]
             http.pool.execute(move || match acpt.accept(conn) {
                 Ok(mut s) => {
+                    #[cfg(feature = "log")]
+                    log::trace!("parse_request() called");
+
                     parse_request(&mut s, config);
                 }
                 Err(s) => {
@@ -52,9 +54,15 @@ pub(crate) fn start_http(http: HttpListener) {
             });
         } else if http.use_pool {
             http.pool.execute(move || {
+                #[cfg(feature = "log")]
+                log::trace!("parse_request() called");
+
                 parse_request(&mut conn, config);
             });
         } else {
+            #[cfg(feature = "log")]
+            log::trace!("parse_request() called");
+
             parse_request(&mut conn, config);
         }
 
