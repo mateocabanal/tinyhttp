@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 license = "GPL-2.0-or-later"
@@ -21,8 +21,8 @@ name = "create_req"
 harness = false
 
 [dependencies]
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.3.0", default-features = false }
-tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.3.0" }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.3.2", default-features = false }
+tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.3.2" }
 
 [features]
 default = ["ssl", "sys", "log"]
