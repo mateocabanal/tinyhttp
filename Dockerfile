@@ -16,7 +16,7 @@ RUN cargo build --release --example heroku-deploy
 RUN mkdir /usr/local/cargo/bin -p ; mv ./target/release/examples/heroku-deploy /usr/local/cargo/bin/heroku-deploy
 
 # Runtime image
-FROM debian:bullseye-slim
+FROM debian:sid-slim
 
 RUN apt update -y && apt install wget unzip -y
 
