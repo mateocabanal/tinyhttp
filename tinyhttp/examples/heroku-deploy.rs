@@ -63,6 +63,7 @@ fn init_html() {
 }
 
 fn main() {
+    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).init().unwrap();
     init_html();
     let socket = TcpListener::bind(":::8080").unwrap();
     let routes = Routes::new(vec![
