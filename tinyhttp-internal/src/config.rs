@@ -204,6 +204,9 @@ impl Config {
 
     pub fn new() -> Config {
         //assert!(routes.len() > 0);
+        
+        #[cfg(feature = "log")]
+        log::info!("tinyhttp version: {}", env!("CARGO_PKG_VERSION"));
 
         Config {
             mount_point: None,
