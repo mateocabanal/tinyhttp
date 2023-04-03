@@ -144,11 +144,11 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         .unwrap();
 
     let raw_body = &buf[body_index + 4..];
-    #[cfg(feature = "log")]
-    log::debug!(
-        "BODY (TOP): {:#?}",
-        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
-    );
+//    #[cfg(feature = "log")]
+//    log::debug!(
+//        "BODY (TOP): {:#?}",
+//        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
+//    );
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
