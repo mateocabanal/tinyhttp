@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 
 use std::collections::HashMap;
@@ -144,14 +144,14 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     let mut headers = Vec::<String>::new();
     let mut headers_index = vec![first_header_index + 2];
     loop {
-        let header_index: usize;
-        match safe_http_index
+        
+        let header_index: usize = match safe_http_index
             .find(|(_, w)| matches!(*w, b"\r\n"))
             .map(|(i, _)| i + 2)
         {
-            Some(s) => header_index = s,
+            Some(s) => s,
             _ => break,
-        }
+        };
 
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
@@ -173,7 +173,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     let iter_status_line = String::from_utf8(buf[..status_line_index].to_vec()).unwrap();
 
     //let headers = parse_headers(http.to_string());
-    let str_status_line = Vec::from_iter(iter_status_line.split_whitespace().into_iter());
+    let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
     let status_line: Rc<Vec<String>> =
         Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
     #[cfg(feature = "log")]
