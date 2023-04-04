@@ -144,11 +144,11 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         .unwrap();
 
     let raw_body = &buf[body_index + 4..];
-    #[cfg(feature = "log")]
-    log::debug!(
-        "BODY (TOP): {:#?}",
-        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
-    );
+//    #[cfg(feature = "log")]
+//    log::debug!(
+//        "BODY (TOP): {:#?}",
+//        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
+//    );
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
@@ -192,7 +192,7 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                 Some(old_path) => {
                     let path = old_path.to_owned() + &status_line[1];
                     if Path::new(&path).extension().is_none() && config.get_spa() {
-                        let body = read_to_vec(&(old_path.to_owned() + "/index.html")).unwrap();
+                        let body = read_to_vec(old_path.to_owned() + "/index.html").unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
 
                         Response::new()

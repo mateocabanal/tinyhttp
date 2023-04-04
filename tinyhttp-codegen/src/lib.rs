@@ -6,7 +6,7 @@ use syn::parse_macro_input;
 
 #[proc_macro_attribute]
 pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let item_fn: syn::ItemFn = syn::parse(item.clone()).unwrap();
+    let item_fn: syn::ItemFn = syn::parse(item).unwrap();
     //eprintln!("{:#?}\n{:#?}", attr, item);
     let args = parse_macro_input!(attr as syn::AttributeArgs);
 
@@ -21,7 +21,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     //eprintln!("LEN: {}", body_args.len());
 
     let mut path;
-    match path_token.clone() {
+    match path_token {
         syn::NestedMeta::Meta(_) => panic!("IN TOKEN MATCH!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
@@ -39,7 +39,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let new_wildcard = if path.contains("/:") {
         let path_clone = path.clone();
-        let mut iter = path_clone.split(":");
+        let mut iter = path_clone.split(':');
         path = iter.next().unwrap().to_string();
         let id = iter.next().unwrap().to_string();
         if path.len() != 1 {
@@ -55,7 +55,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     match return_type {
         syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
-        syn::ReturnType::Type(_, value) => match *value.clone() {
+        syn::ReturnType::Type(_, value) => match *value {
             syn::Type::Path(stream) => {
                 return_type_str = stream.path.segments.last().unwrap().ident.to_string()
             }
@@ -63,11 +63,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         },
     };
 
-    let is_ret_type_res = if return_type_str == "Response" {
-        true
-    } else {
-        false
-    };
+    let is_ret_type_res = return_type_str == "Response";
 
     let new_get_body = if is_ret_type_res {
         quote! {
@@ -137,7 +133,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     let is_body_args = !fn_args.is_empty();
 
     let mut path;
-    match path_token.clone() {
+    match path_token {
         syn::NestedMeta::Meta(_) => panic!("IN MATCH RETURN TYPE!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
@@ -154,7 +150,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
     let new_wildcard = if path.contains("/:") {
         let path_clone = path.clone();
-        let mut iter = path_clone.split(":");
+        let mut iter = path_clone.split(':');
         path = iter.next().unwrap().to_string();
         let id = iter.next().unwrap().to_string();
         if path.len() != 1 {
@@ -170,7 +166,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     match return_type {
         syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
-        syn::ReturnType::Type(_, value) => match *value.clone() {
+        syn::ReturnType::Type(_, value) => match *value {
             syn::Type::Path(stream) => {
                 return_type_str = stream.path.segments.last().unwrap().ident.to_string()
             }
@@ -178,11 +174,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         },
     };
 
-    let is_ret_type_res = if return_type_str == "Response" {
-        true
-    } else {
-        false
-    };
+    let is_ret_type_res = return_type_str == "Response";
 
     let new_post_body = if is_ret_type_res {
         quote! {
