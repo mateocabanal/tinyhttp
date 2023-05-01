@@ -33,9 +33,10 @@ version = "0.4.17"
 optional = true
 
 [features]
-default = ["sys", "log"]
+default = ["sys", "log", "http2"]
 openssl_vendor = ["ssl", "openssl?/vendored"]
 #async = ["dep:async-std", "dep:futures"]
+http2 = []
 ssl = ["dep:openssl"]
 sys = ["ssl", "dep:flate2"]
 log = ["dep:simple_logger", "dep:log"]

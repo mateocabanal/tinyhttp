@@ -20,12 +20,11 @@ pub(crate) fn parse_buffer_to_frames(mut data_arr: Vec<u8>) -> Vec<Box<dyn HTTP2
         let frame =
             parse_data_frame(&data_arr[it..(it as u32 + frame_len).try_into().unwrap()]).unwrap();
 
-        // #[cfg(feature = "log")]
-        // log::trace!(
-        //     "PARSED FRAME TYPE + LEN: {}, {}",
-        //     frame.get_frame_type_as_u8(),
-        //     frame.clone().to_vec().len()
-        // );
+         #[cfg(feature = "log")]
+         log::trace!(
+             "PARSED FRAME TYPE: {}",
+             frame.get_frame_type_as_u8(),
+         );
 
         http2_frames.push(frame);
         it += frame_len as usize;
