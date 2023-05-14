@@ -19,6 +19,10 @@ log = "0.4.17"
 name = "create_req"
 harness = false
 
+[[example]]
+name = "example"
+required-features = ["http2"]
+
 [dependencies]
 tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.3.0", default-features = false }
 tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.3.0" }

@@ -26,7 +26,7 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
-    http2::{self},
+    http2::{self, connection::parse_data_frame},
     request::Request,
     response::Response,
 };
@@ -68,7 +68,15 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 
     #[cfg(feature = "http2")]
     if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") && cfg!(debug_assertions) {
-        return Request::new(vec![], vec![], vec![], None).set_http2(true);
+        #[cfg(debug_assertions)]
+        {
+            let frame = parse_data_frame(&buf);
+            if let Ok(frame) = frame {
+                log::debug!("build_and_parse_req() -> frame: {:#?}", frame);
+            };
+        }
+
+        return Request::new(buf, vec![], vec![], None).set_http2(true);
     }
 
     let mut safe_http_index = buf.windows(2).enumerate();
@@ -279,13 +287,21 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
 }
 
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let is_http2_check = conn.bytes().map(|x| x.unwrap());
     let buf = read_stream(conn);
-    let mut request = build_and_parse_req(buf);
+
+    // PERF: Must replace clone
+    let mut request = build_and_parse_req(buf.clone());
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
 
     if response.borrow().http2 {
+        #[cfg(debug_assertions)]
+        {
+            let frame = parse_data_frame(buf.clone().as_ref());
+            if let Ok(frame) = frame {
+                log::debug!("build_and_parse_req() -> frame: {:#?}", frame);
+            };
+        }
         response.borrow_mut().send_http_2(conn);
         return;
     }
@@ -367,6 +383,8 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
 
         brw.headers
             .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
+        brw.body = Some(vec![]);
+        brw.status_line = "HTTP/1.1 101 Switching Protocols".to_owned();
         brw.send(conn);
         brw.send_http_2(conn);
         return;
