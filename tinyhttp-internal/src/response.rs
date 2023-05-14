@@ -111,6 +111,8 @@ impl Response {
             .stream_id(0);
         sock.write_all(&frame.to_vec()).unwrap();
 
+        log::trace!("SENT INITIAL SETTINGS FRAME");
+
         //let mut buf = read_stream(sock);
         //buf.drain(0..=23);
         //let frame = parse_data_frame(&buf).unwrap();
@@ -124,11 +126,10 @@ impl Response {
             //log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
             let mut frames = parse_buffer_to_frames(buf);
 
-            //            #[cfg(feature = "log")]
-            //            log::trace!("frames: {:#?}", frames);
-
             for frame in frames.clone() {
-                log::trace!("frame type: {}", frame.get_frame_type_as_u8());
+                #[cfg(feature = "log")]
+                //log::trace!("frames: {:#?}", frames);
+
                 match frame.get_frame_type() {
                     HTTP2FrameType::Data => {
                         #[cfg(feature = "log")]
@@ -158,7 +159,7 @@ impl Response {
                                 .frame_type(4)
                                 .flags(1)
                                 .stream_id(0)
-                                .payload(vec![0u8; 0]);
+                                .payload(Vec::from([3u8.to_be_bytes(), 100u8.to_be_bytes()]));
                             sock.write_all(&settings_frame.to_vec()).unwrap();
                             log::trace!("SENT SETTINGS FRAME!");
                         }

@@ -1,6 +1,6 @@
 use dyn_clone::DynClone;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum HTTP2FrameType {
     Data = 0,
     Headers = 1,
@@ -14,7 +14,7 @@ pub enum HTTP2FrameType {
     Continuation = 9,
 }
 
-pub trait HTTP2Frame: DynClone {
+pub trait HTTP2Frame: DynClone + std::fmt::Debug {
     fn get_flags(&self) -> u8;
 
     fn get_payload(&self) -> Option<Vec<u8>>;
@@ -31,7 +31,7 @@ impl Clone for Box<dyn HTTP2Frame> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct DataFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -140,7 +140,7 @@ impl HTTP2Frame for DataFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct HeadersFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -263,7 +263,7 @@ impl HTTP2Frame for HeadersFrame {
         frame
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PriorityFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -387,7 +387,7 @@ impl HTTP2Frame for PriorityFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct RSTFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -511,7 +511,7 @@ impl HTTP2Frame for RSTFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SettingsFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -643,7 +643,7 @@ impl HTTP2Frame for SettingsFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PushFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -767,7 +767,7 @@ impl HTTP2Frame for PushFrame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PingFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -890,7 +890,7 @@ impl HTTP2Frame for PingFrame {
         frame
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct GoAwayFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -1013,7 +1013,7 @@ impl HTTP2Frame for GoAwayFrame {
         frame
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct WindowUpdateFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
@@ -1136,7 +1136,7 @@ impl HTTP2Frame for WindowUpdateFrame {
         frame
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ContinuationFrame {
     length: Option<usize>,
     frame_type: Option<HTTP2FrameType>,
