@@ -585,9 +585,15 @@ impl SettingsFrame {
 
     pub fn build_payload() -> Vec<u8> {
         let mut payload = Vec::new();
-        let id: [u8; 2] = 3u16.to_be_bytes();
-        let value: [u8; 4] = 1u32.to_be_bytes();
-        payload = [id.as_slice(), value.as_slice()].concat();
+        let header_table_size = (0x01u16, 0u32);
+        let enable_push = (0x02u16, 0u32);
+        let max_streams = (0x03u16, 1u32);
+        payload.extend(header_table_size.0.to_be_bytes());
+        payload.extend(header_table_size.1.to_be_bytes());
+        payload.extend(enable_push.0.to_be_bytes());
+        payload.extend(enable_push.1.to_be_bytes());
+        payload.extend(max_streams.0.to_be_bytes());
+        payload.extend(max_streams.1.to_be_bytes());
         payload
     }
 }

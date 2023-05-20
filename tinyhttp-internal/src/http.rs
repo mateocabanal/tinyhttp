@@ -384,7 +384,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         brw.headers
             .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
         brw.body = Some(vec![]);
-        brw.status_line = "HTTP/1.1 101 Switching Protocols".to_owned();
+        brw.status_line = "HTTP/1.1 101 Switching Protocols\r\n".to_owned();
         brw.send(conn);
         brw.send_http_2(conn);
         return;

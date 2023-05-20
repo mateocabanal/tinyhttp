@@ -103,11 +103,13 @@ impl Response {
         //     b"HTTP/1.1 101 Switching Protocols \r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n",
         // )
         // .unwrap();
+
+        // Sets max_concurrent_streams to 1
         let payload = SettingsFrame::build_payload();
         let frame = SettingsFrame::new()
             .frame_type(4)
             .flags(0)
-            .payload(payload.to_vec())
+            .payload(payload)
             .stream_id(0);
         sock.write_all(&frame.to_vec()).unwrap();
 
@@ -129,7 +131,6 @@ impl Response {
             for frame in frames.clone() {
                 #[cfg(feature = "log")]
                 //log::trace!("frames: {:#?}", frames);
-
                 match frame.get_frame_type() {
                     HTTP2FrameType::Data => {
                         #[cfg(feature = "log")]
@@ -137,18 +138,22 @@ impl Response {
 
                         todo!()
                     }
-                    HTTP2FrameType::Headers => todo!(),
+                    HTTP2FrameType::Headers => {
+                        log::debug!("header frame found");
+                    },
                     HTTP2FrameType::Priority => todo!(),
                     HTTP2FrameType::RST_STREAM => todo!(),
                     HTTP2FrameType::Settings => {
                         let payload = frame.get_payload().unwrap();
-                        if payload.len() >= 6 {
-                            let id: u16 = (u16::from(payload[0]) << 8) | u16::from(payload[1]);
+                        let mut pos = 0;
+                        while pos < payload.len() {
+                            let id: u16 = (u16::from(payload[pos]) << 8) | u16::from(payload[pos + 1]);
                             //let id = u16::from_be_bytes(payload[0..=1].try_into().unwrap());
-                            let value = u32::from_be_bytes(payload[2..=5].try_into().unwrap());
+                            let value = u32::from_be_bytes(payload[pos + 2..=pos + 5].try_into().unwrap());
 
                             #[cfg(feature = "log")]
                             log::trace!("SETTINGS --> ID: {}, VALUE: {}", id, value);
+                            pos += 6;
                         }
 
                         #[cfg(feature = "log")]
@@ -157,22 +162,37 @@ impl Response {
                         if frame.get_flags() != 1 {
                             let settings_frame = SettingsFrame::new()
                                 .frame_type(4)
-                                .flags(1)
+                                .flags(0)
                                 .stream_id(0)
-                                .payload(Vec::from([3u8.to_be_bytes(), 100u8.to_be_bytes()]));
-                            sock.write_all(&settings_frame.to_vec()).unwrap();
+                                .payload(vec![]);
+
+                            let settings_vec = settings_frame.to_vec();
+                            log::trace!("sending settings frame: {:?}", &settings_vec);
+                            sock.write_all(&settings_vec).unwrap();
                             log::trace!("SENT SETTINGS FRAME!");
+                        } else {
+                            log::trace!("client ACK'd!");
                         }
+
                     }
                     HTTP2FrameType::PUSH_PROMISE => todo!(),
-                    HTTP2FrameType::Ping => todo!(),
+                    HTTP2FrameType::Ping => {
+                        let mut ping_frame = PingFrame::new();
+                        let ping_frame = ping_frame.flags(frame.get_flags());
+                        let ping_frame = ping_frame.payload(frame.get_payload().unwrap());
+                        let ping_frame = ping_frame.flags(0x01);
+                        sock.write_all(&ping_frame.to_vec()).unwrap();
+                        log::trace!("SENT PING FRAME!");
+                    }
                     HTTP2FrameType::GO_AWAY => {
                         let mut payload = frame.get_payload().unwrap();
                         payload[0] = payload[0] & 0xE;
+                        let debug_info = &payload[7..];
                         let err_code = u32::from_be_bytes(payload[4..=7].try_into().unwrap());
 
                         #[cfg(feature = "log")]
                         log::trace!("GO_AWAY FRAME RECV!: {}", err_code);
+                        log::trace!("GO_AWAY: debug info: {}", String::from_utf8_lossy(debug_info));
 
                         term = true;
                     }
@@ -187,7 +207,6 @@ impl Response {
                     }
                     HTTP2FrameType::Continuation => todo!(),
                 }
-                frames.remove(0);
             }
         }
     }
