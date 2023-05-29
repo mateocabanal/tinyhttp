@@ -87,6 +87,7 @@ impl<'a, T: Debug + Clone> Iterator for Iter<'a, T> {
     }
 }
 
+#[cfg(tests)]
 mod tests {
     
     use super::LRUCache;
