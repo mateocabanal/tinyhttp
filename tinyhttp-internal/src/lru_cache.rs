@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-};
-
+use std::fmt::Debug;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -47,10 +44,11 @@ impl<T: Debug + Clone> LRUCache<T> {
     }
 
     pub(crate) fn touch(&mut self, idx: usize) -> Option<()> {
-
         #[cfg(debug_assertions)]
-        let clone = self.array.get(idx).cloned();
-        log::debug!("Moved element {}\n {:#?} to front", idx, clone?);
+        {
+            let clone = self.array.get(idx).cloned();
+            log::debug!("Moved element {}\n {:#?} to front", idx, clone?);
+        }
 
         self.array.get_mut(0..=idx)?.rotate_right(1);
 
@@ -89,7 +87,7 @@ impl<'a, T: Debug + Clone> Iterator for Iter<'a, T> {
 
 #[cfg(tests)]
 mod tests {
-    
+
     use super::LRUCache;
 
     #[test]
@@ -114,7 +112,7 @@ mod tests {
         assert_eq!(lru.array[2], 1);
         assert_eq!(lru.array[3], 0);
         assert_eq!(lru.array[4], 4);
-        
+
         let val = lru.iter().find(|i| *i == 4).unwrap();
 
         assert_eq!(val, lru.array[0]);

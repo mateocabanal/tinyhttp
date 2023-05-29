@@ -6,7 +6,7 @@ keywords = ["http", "server"]
 license = "GPL-2.0-or-later"
 name = "tinyhttp-internal"
 repository = "https://github.com/mateocabanal/tinyhttp-internal"
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies]
 mime_guess = "2.0.4"
