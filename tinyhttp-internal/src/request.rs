@@ -34,7 +34,7 @@ impl Request {
             Ok(s) => Some(s),
             Err(_) => {
                 #[cfg(feature = "log")]
-                log::info!("Not an ASCII body");
+                log::debug!("Not an ASCII body");
                 None
             }
         };
@@ -58,7 +58,7 @@ impl Request {
         }
 
         #[cfg(feature = "log")]
-        log::info!("Request headers: {:?}", headers);
+        log::trace!("Request headers: {:?}", headers);
 
         if let Some(b) = ascii_body {
             Request {

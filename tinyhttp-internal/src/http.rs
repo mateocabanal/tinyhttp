@@ -5,7 +5,6 @@ use std::{
     iter::FromIterator,
     path::Path,
     rc::Rc,
-    time::Instant,
     vec,
 };
 
@@ -36,7 +35,7 @@ pub(crate) fn start_http(http: HttpListener) {
         let mut conn = stream.unwrap();
         let config = http.config.clone();
 
-        if config.ssl && cfg!(feature = "ssl") {
+        if http.config.ssl && cfg!(feature = "ssl") {
             #[cfg(feature = "ssl")]
             let acpt = http.ssl_acpt.clone().unwrap();
             #[cfg(feature = "ssl")]
@@ -94,13 +93,13 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         .unwrap();
 
     #[cfg(feature = "log")]
-    log::debug!(
+    log::trace!(
         "STATUS LINE: {:#?}",
         std::str::from_utf8(&buf[..status_line_index])
     );
 
     #[cfg(feature = "log")]
-    log::debug!(
+    log::trace!(
         "FIRST HEADER: {:#?}",
         std::str::from_utf8(&buf[status_line_index + 2..first_header_index])
     );
@@ -135,7 +134,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     let status_line: Rc<Vec<String>> =
         Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
     #[cfg(feature = "log")]
-    log::debug!("{:#?}", status_line);
+    log::trace!("{:#?}", status_line);
     let body_index = buf
         .windows(4)
         .enumerate()
@@ -152,7 +151,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
-fn build_res(req: &mut Request, config: &Config) -> Response {
+fn build_res(req: &mut Request, config: &mut Config) -> Response {
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
@@ -162,7 +161,7 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
         "GET" => match config.get_routes(&mut req_path.borrow_mut()) {
             Some(route) => {
                 #[cfg(feature = "log")]
-                log::debug!("Found path in routes!");
+                log::trace!("Found path in routes!");
 
                 let req_new = if route.wildcard().is_some() {
                     let stat_line = &status_line[1];
@@ -276,11 +275,11 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
     }
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
+fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     let buf = read_stream(conn);
     let mut request = build_and_parse_req(buf);
 
-    let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
+    let response = Rc::new(RefCell::new(build_res(&mut request, &mut config)));
 
     let mut res_brw = response.borrow_mut();
     let mime = res_brw.mime.clone().unwrap();
@@ -319,7 +318,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         let res = tmp_str.split(',').map(|s| s.trim().to_string()).collect();
 
         #[cfg(feature = "log")]
-        log::debug!("{:#?}", &res);
+        log::trace!("{:#?}", &res);
 
         res
     } else {
@@ -331,9 +330,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         && comp.contains(&"gzip".to_string())
         && req_headers.contains_key("accept-encoding")
     {
-        #[cfg(feature = "log")]
-        log::debug!("GZIP ENABLED!");
-        let start: Instant = std::time::Instant::now();
         let body = res_brw.body.clone();
         let mut writer = GzEncoder::new(Vec::new(), Compression::default());
         writer.write_all(&body.unwrap()).unwrap();
@@ -341,13 +337,11 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         res_brw
             .headers
             .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
-        #[cfg(feature = "log")]
-        log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
     }
 
     #[cfg(feature = "log")]
     {
-        log::debug!(
+        log::trace!(
             "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
             res_brw.body.as_ref().unwrap(),
             res_brw.headers,

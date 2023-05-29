@@ -142,7 +142,6 @@ mod tests {
         assert_eq!(
             b"Accept-Encoding: gzip".to_vec(),
             routes
-                
                 .get_stream()
                 .last()
                 .unwrap()

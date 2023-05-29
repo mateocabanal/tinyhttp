@@ -16,6 +16,7 @@ infer = "0.12.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"
 rusty_pool = "0.7.0"
+uluru = "3.0.0"
 
 
 #async-std = { version = "1.12.0", features = ["attributes"], optional = true }

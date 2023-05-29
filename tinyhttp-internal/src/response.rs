@@ -52,7 +52,7 @@ impl Response {
     pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
         let line_bytes = self.status_line.as_bytes().to_vec();
         #[cfg(feature = "log")]
-        log::debug!("res status line: {:#?}", self.status_line);
+        log::trace!("res status line: {:#?}", self.status_line);
 
         let mut header_bytes = Vec::from_iter(
             self.headers
@@ -71,7 +71,7 @@ impl Response {
         }
 
         #[cfg(feature = "log")]
-        log::debug!(
+        log::trace!(
             "RESPONSE HEADERS (AFTER PARSE): {}",
             String::from_utf8(full_req.clone()).unwrap()
         );

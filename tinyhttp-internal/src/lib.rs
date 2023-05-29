@@ -6,6 +6,7 @@ pub mod config;
 pub mod request;
 pub mod response;
 pub mod thread_pool;
+pub(crate) mod lru_cache;
 
 pub mod http;
 

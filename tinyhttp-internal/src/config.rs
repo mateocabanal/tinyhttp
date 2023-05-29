@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::request::Request;
+use crate::{lru_cache::LRUCache, request::Request};
 pub use dyn_clone::DynClone;
 use std::fmt::Debug;
 
@@ -130,6 +130,7 @@ impl HttpListener {
 
     #[cfg(not(feature = "async"))]
     pub fn start(self) {
+
         start_http(self);
     }
 
@@ -162,8 +163,8 @@ impl Routes {
 #[derive(Clone)]
 pub struct Config {
     mount_point: Option<String>,
-    get_routes: Option<RouteVec>,
-    post_routes: Option<RouteVec>,
+    get_routes: Option<LRUCache<Box<dyn Route>>>,
+    post_routes: Option<LRUCache<Box<dyn Route>>>,
     debug: bool,
     pub ssl: bool,
     ssl_chain: Option<String>,
@@ -204,7 +205,7 @@ impl Config {
 
     pub fn new() -> Config {
         //assert!(routes.len() > 0);
-        
+
         #[cfg(feature = "log")]
         log::info!("tinyhttp version: {}", env!("CARGO_PKG_VERSION"));
 
@@ -265,33 +266,36 @@ impl Config {
     /// ```
 
     pub fn routes(mut self, routes: Routes) -> Self {
-        let mut get_routes: RouteVec = vec![];
-        let mut post_routes: RouteVec = vec![];
+        let mut get_routes = vec![];
+        let mut post_routes = vec![];
         let routes = routes.get_stream();
 
         for route in routes {
-            let clone = dyn_clone::clone_box(&*route);
             match route.get_method() {
                 Method::GET => {
                     #[cfg(feature = "log")]
-                    log::info!("GET Route init!: {}", clone.get_path());
+                    log::info!("GET Route init!: {}", &route.get_path());
                     get_routes.push(route);
                 }
                 Method::POST => {
                     #[cfg(feature = "log")]
-                    log::info!("POST Route init!: {}", clone.get_path());
+                    log::info!("POST Route init!: {}", &route.get_path());
                     post_routes.push(route);
                 }
             }
         }
         if !get_routes.is_empty() {
-            self.get_routes = Some(get_routes);
+            self.get_routes = Some(LRUCache {
+                array: get_routes.into_boxed_slice(),
+            });
         } else {
             self.get_routes = None;
         }
 
         if !post_routes.is_empty() {
-            self.post_routes = Some(post_routes);
+            self.post_routes = Some(LRUCache {
+                array: post_routes.into_boxed_slice(),
+            });
         } else {
             self.post_routes = None;
         }
@@ -360,7 +364,6 @@ impl Config {
         self
     }
 
-
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }
@@ -376,7 +379,7 @@ impl Config {
     pub fn get_mount(&self) -> Option<&String> {
         self.mount_point.as_ref()
     }
-    pub fn get_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
+    pub fn get_routes(&mut self, path: &mut String) -> Option<Box<dyn Route>> {
         if path.ends_with('/') && path.matches('/').count() > 1 {
             path.pop();
         };
@@ -384,41 +387,39 @@ impl Config {
         #[cfg(feature = "log")]
         log::trace!("get_routes -> new_path: {}", &path);
 
-        match self.get_routes.clone() {
-            Some(routes) => {
-                for route in routes {
-                    #[cfg(feature = "log")]
-                    log::trace!("get_routes -> paths: {}", route.get_path());
+        let routes_brw = &mut self.get_routes;
 
-                    if route.get_path() == path {
-                        #[cfg(feature = "log")]
-                        log::trace!("Route found: {:#?}", route);
+        if let Some(routes) = routes_brw {
+            for (i, route) in routes.array.iter().enumerate() {
+                log::debug!("array: {:#?}", routes.array);
+                #[cfg(feature = "log")]
+                log::debug!("get_routes -> paths: {}", route.get_path());
 
-                        return Some(route);
-                    } else if path.contains(route.get_path()) && route.wildcard().is_some() {
-                        return Some(route);
-                    } else {
-                        continue;
-                    }
+                if route.get_path() == path
+                    || (path.contains(route.get_path()) && route.wildcard().is_some())
+                {
+                    let res_route = routes.get(i).cloned();
+                    #[cfg(debug_assertions)]
+                    log::debug!("returning: {}", res_route.as_ref()?.get_path());
+                    debug_assert_eq!(res_route.as_ref()?.get_path(), routes.array[0].get_path());
+
+                    return res_route;
                 }
             }
-            None => return None,
         }
         None
     }
 
-    pub fn post_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
+    pub fn post_routes(&mut self, path: &mut String) -> Option<Box<dyn Route>> {
         #[cfg(feature = "log")]
         log::trace!("post_routes -> path: {}", path);
         if path.ends_with('/') && path.matches('/').count() > 1 {
             path.pop();
         };
-        #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &path);
 
-        match self.post_routes.clone() {
+        match self.post_routes.as_mut() {
             Some(routes) => {
-                for route in routes {
+                for route in routes.iter() {
                     if route.get_path() == path {
                         /*#[cfg(feature = "log")]
                         log::trace!(
@@ -433,8 +434,6 @@ impl Config {
                         return Some(route);
                     } else if path.contains(route.get_path()) && route.wildcard().is_some() {
                         return Some(route);
-                    } else {
-                        continue;
                     }
                 }
             }
