@@ -78,6 +78,8 @@
 //!         .body(b"Hello from response!\r\n".to_vec())
 //! }
 
+#![allow(clippy::needless_doctest_main)]
+
 pub use tinyhttp_codegen as codegen;
 pub use tinyhttp_internal as internal;
 
@@ -110,17 +112,14 @@ mod tests {
         }
 
         let routes = Routes::new(vec![get(), post()]);
-        assert_eq!(
-            false,
-            routes
-                .clone()
-                .get_stream()
-                .clone()
-                .first()
-                .unwrap()
-                .wildcard()
-                .is_some()
-        );
+        assert!(!routes
+            .clone()
+            .get_stream()
+            .clone()
+            .first()
+            .unwrap()
+            .wildcard()
+            .is_some());
         let request = Request::new(
             b"Hello".to_vec(),
             vec!["Accept-Encoding: gzip".to_string()],

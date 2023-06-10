@@ -14,6 +14,12 @@ pub struct Response {
     pub http2: bool,
 }
 
+impl Default for Response {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Response {
     pub fn new() -> Response {
         Response {
