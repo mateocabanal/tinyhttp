@@ -3,8 +3,6 @@ use std::{
     io::{Read, Write},
 };
 
-
-
 #[derive(Clone, Debug)]
 pub struct Response {
     pub headers: HashMap<String, String>,
@@ -60,35 +58,29 @@ impl Response {
         #[cfg(feature = "log")]
         log::trace!("res status line: {:#?}", self.status_line);
 
-        let mut header_bytes = Vec::from_iter(
-            self.headers
-                .iter()
-                .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()]),
-        );
-        let mut full_req = Vec::new();
-        for i in line_bytes {
-            full_req.push(i);
-        }
-        header_bytes.push(b"\r\n");
-        for i in header_bytes {
-            for j in i {
-                full_req.push(*j);
-            }
-        }
+        let mut header_bytes: Vec<u8> = self
+            .headers
+            .iter()
+            .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()].concat())
+            .collect();
+
+        header_bytes.extend(b"\r\n");
 
         #[cfg(feature = "log")]
-        log::trace!(
-            "RESPONSE HEADERS (AFTER PARSE): {}",
-            String::from_utf8(full_req.clone()).unwrap()
-        );
+        {
+            log::trace!("HEADER AS STR: {}", String::from_utf8(header_bytes.clone()).unwrap());
+            log::trace!("STATUS LINE AS STR: {}", std::str::from_utf8(line_bytes.as_slice()).unwrap());
+        };
 
-        if let Some(i) = self.body.as_ref() {
-            for j in i {
-                full_req.push(*j);
-            }
-        }
+        let mut full_req = Vec::new();
+        full_req.extend_from_slice(
+            &mut [
+                line_bytes.as_slice(),
+                header_bytes.as_slice(),
+                self.body.as_ref().unwrap(),
+            ].concat()
+        );
 
         sock.write_all(&full_req).unwrap();
     }
-
 }

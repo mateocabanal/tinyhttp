@@ -289,13 +289,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         None => mime,
     };
 
-    let tinyhttp_version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
-
-    //insert tinyhttp version into headers
-    res_brw.headers.insert(
-        String::from("tinyhttp-version: "),
-        tinyhttp_version.to_owned() + "\r\n",
-    );
 
     if let Some(vec) = config.get_headers() {
         for (i, j) in vec.iter() {
