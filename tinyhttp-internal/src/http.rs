@@ -143,11 +143,11 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         .unwrap();
 
     let raw_body = &buf[body_index + 4..];
-//    #[cfg(feature = "log")]
-//    log::debug!(
-//        "BODY (TOP): {:#?}",
-//        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
-//    );
+    //    #[cfg(feature = "log")]
+    //    log::debug!(
+    //        "BODY (TOP): {:#?}",
+    //        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
+    //    );
     Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
 }
 
@@ -289,18 +289,11 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         None => mime,
     };
 
-    let tinyhttp_version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
 
-    //insert tinyhttp version into headers
-    res_brw.headers.insert(String::from("tinyhttp-version: "), tinyhttp_version.to_owned() + "\r\n");
-
-    match config.get_headers() {
-        Some(vec) => {
-            for (i, j) in vec.iter() {
-                res_brw.headers.insert(i.to_string(), j.to_string());
-            }
+    if let Some(vec) = config.get_headers() {
+        for (i, j) in vec.iter() {
+            res_brw.headers.insert(i.to_string(), j.to_string());
         }
-        None => (),
     }
 
     res_brw
