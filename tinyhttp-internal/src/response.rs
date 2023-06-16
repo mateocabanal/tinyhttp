@@ -66,21 +66,19 @@ impl Response {
 
         header_bytes.extend(b"\r\n");
 
-        #[cfg(feature = "log")]
+        #[cfg(all(feature = "log", debug_assertions))] 
         {
             log::trace!("HEADER AS STR: {}", String::from_utf8(header_bytes.clone()).unwrap());
             log::trace!("STATUS LINE AS STR: {}", std::str::from_utf8(line_bytes.as_slice()).unwrap());
         };
 
-        let mut full_req = Vec::new();
-        full_req.extend_from_slice(
-            &mut [
+        let full_req: &[u8] = 
+            &[
                 line_bytes.as_slice(),
                 header_bytes.as_slice(),
                 self.body.as_ref().unwrap(),
-            ].concat()
-        );
+            ].concat();
 
-        sock.write_all(&full_req).unwrap();
+        sock.write_all(full_req).unwrap();
     }
 }

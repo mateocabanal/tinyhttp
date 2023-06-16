@@ -389,7 +389,7 @@ impl Config {
             return Some(route.clone());
         }
 
-        if let Some(wildcard_route) = self.get_routes.as_ref()?.iter().find(|p| path.starts_with(p.0)) {
+        if let Some(wildcard_route) = self.get_routes.as_ref()?.iter().find(|p| path.starts_with(p.0) && p.1.wildcard().is_some()) {
             return Some(wildcard_route.1.clone())
         }
 

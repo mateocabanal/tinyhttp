@@ -113,10 +113,9 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
-        let header =
-            String::from_utf8(buf[*headers_index.last().unwrap()..header_index - 2].to_vec())
-                .unwrap()
-                .to_lowercase();
+        let header = std::str::from_utf8(&buf[*headers_index.last().unwrap()..header_index - 2])
+            .unwrap()
+            .to_lowercase();
         if header.is_empty() {
             break;
         }
@@ -127,12 +126,11 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         headers.push(header);
     }
 
-    let iter_status_line = String::from_utf8(buf[..status_line_index].to_vec()).unwrap();
+    let iter_status_line = std::str::from_utf8(&buf[..status_line_index]).unwrap();
 
     //let headers = parse_headers(http.to_string());
     let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
-    let status_line: Rc<Vec<String>> =
-        Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
+    let status_line: Vec<String> = str_status_line.iter().map(|i| String::from(*i)).collect();
     #[cfg(feature = "log")]
     log::trace!("{:#?}", status_line);
     let body_index = buf
@@ -148,7 +146,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     //        "BODY (TOP): {:#?}",
     //        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
     //    );
-    Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
+    Request::new(raw_body, headers, status_line, None)
 }
 
 fn build_res(req: &mut Request, config: &mut Config) -> Response {
@@ -289,7 +287,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         None => mime,
     };
 
-
     if let Some(vec) = config.get_headers() {
         for (i, j) in vec.iter() {
             res_brw.headers.insert(i.to_string(), j.to_string());
@@ -306,9 +303,9 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
 
     let req_headers = request.get_headers();
 
+    let tmp_str = req_headers.get("accept-encoding").unwrap();
     let comp = if req_headers.contains_key("accept-encoding") {
-        let tmp_str: String = req_headers.get("accept-encoding").unwrap().to_owned();
-        let res = tmp_str.split(',').map(|s| s.trim().to_string()).collect();
+        let res = tmp_str.split(',').map(|s| s.trim()).collect();
 
         #[cfg(feature = "log")]
         log::trace!("{:#?}", &res);
@@ -319,13 +316,9 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     };
 
     #[cfg(feature = "sys")]
-    if config.get_gzip()
-        && comp.contains(&"gzip".to_string())
-        && req_headers.contains_key("accept-encoding")
-    {
-        let body = res_brw.body.clone();
+    if config.get_gzip() && comp.contains(&"gzip") {
         let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-        writer.write_all(&body.unwrap()).unwrap();
+        writer.write_all(res_brw.body.as_ref().unwrap()).unwrap();
         res_brw.body = Some(writer.finish().unwrap());
         res_brw
             .headers

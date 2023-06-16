@@ -8,7 +8,6 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Request {
-    parsed_body: Option<String>,
     headers: HashMap<String, String>,
     status_line: Vec<String>,
     body: Vec<u8>,
@@ -24,21 +23,11 @@ pub enum BodyType {
 
 impl Request {
     pub fn new(
-        raw_body: Vec<u8>,
+        raw_body: &[u8],
         raw_headers: Vec<String>,
         status_line: Vec<String>,
         wildcard: Option<String>,
     ) -> Request {
-        let raw_body_clone = raw_body.clone();
-        let ascii_body = match std::str::from_utf8(&raw_body_clone) {
-            Ok(s) => Some(s),
-            Err(_) => {
-                #[cfg(feature = "log")]
-                log::debug!("Not an ASCII body");
-                None
-            }
-        };
-
         let mut headers: HashMap<String, String> = HashMap::new();
         #[cfg(feature = "log")]
         log::trace!("Headers: {:#?}", raw_headers);
@@ -60,24 +49,12 @@ impl Request {
         #[cfg(feature = "log")]
         log::trace!("Request headers: {:?}", headers);
 
-        if let Some(b) = ascii_body {
-            Request {
-                parsed_body: Some(b.to_string()),
-                body: raw_body,
-                headers,
-                status_line,
-                wildcard,
-                is_http2: false,
-            }
-        } else {
-            Request {
-                body: raw_body,
-                parsed_body: None,
-                headers,
-                status_line,
-                wildcard,
-                is_http2: false,
-            }
+        Request {
+            body: raw_body.to_vec(),
+            headers,
+            status_line,
+            wildcard,
+            is_http2: false,
         }
     }
 
@@ -92,8 +69,12 @@ impl Request {
     }
 
     /// Get request body as a string
-    pub fn get_parsed_body(&self) -> Option<&String> {
-        self.parsed_body.as_ref()
+    pub fn get_parsed_body(&self) -> Option<String> {
+        if let Ok(s) = std::str::from_utf8(&self.body) {
+            Some(s.to_string())
+        } else {
+            None
+        }
     }
 
     /// Get request headers in a HashMap
