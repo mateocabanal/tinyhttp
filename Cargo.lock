@@ -735,6 +735,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "minreq"
+version = "2.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3de406eeb24aba36ed3829532fa01649129677186b44a49debec0ec574ca7da7"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1236,6 +1245,7 @@ version = "0.3.7"
 dependencies = [
  "criterion",
  "log",
+ "minreq",
  "reqwest",
  "simple_logger",
  "tinyhttp-codegen",

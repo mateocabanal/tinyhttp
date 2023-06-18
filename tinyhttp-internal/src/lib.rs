@@ -11,11 +11,13 @@ pub mod http;
 
 #[cfg(test)]
 mod tests {
+    use crate::request::Request;
+
     #[test]
     fn build_request() {
         use crate::request::Request;
         let request = Request::new(
-            b"Hello, World!".to_vec(),
+            b"Hello, World!",
             vec!["Content-Type: text/plain".to_string()],
             vec![
                 "GET".to_string(),
@@ -42,4 +44,5 @@ mod tests {
             String::from("1 2 3 test test...")
         );
     }
+
 }

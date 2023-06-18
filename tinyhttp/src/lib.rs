@@ -93,6 +93,23 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
+    use crate::prelude::*;
+
+    fn setup_http_server() -> Result<(), Box<dyn std::error::Error>> {
+        #[get("/ping")]
+        fn ping() -> &'static str {
+            "pong\n"
+        }
+
+        let sock = std::net::TcpListener::bind("127.0.0.1:23195")?;
+        let routes = Routes::new(vec![ping()]);
+        let config = Config::new().routes(routes);
+        std::thread::spawn(move || {
+            HttpListener::new(sock, config).start();
+        });
+        Ok(())
+    }
+
     #[test]
     fn test_codegen() {
         use crate::prelude::*;
@@ -112,16 +129,15 @@ mod tests {
         }
 
         let routes = Routes::new(vec![get(), post()]);
-        assert!(!routes
+        assert!(routes
             .clone()
             .get_stream()
             .clone()
             .first()
             .unwrap()
-            .wildcard()
-            .is_some());
+            .wildcard().is_none());
         let request = Request::new(
-            b"Hello".to_vec(),
+            b"Hello",
             vec!["Accept-Encoding: gzip".to_string()],
             vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
             None,
@@ -148,5 +164,15 @@ mod tests {
                 .body
                 .unwrap()
         );
+    }
+    #[test]
+    fn respond_to_minimal_request() -> Result<(), Box<dyn std::error::Error>> {
+        setup_http_server()?;
+
+        let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
+        let parsed_resp = request.as_str()?;
+        assert_eq!(parsed_resp, "pong\n");
+
+        Ok(())
     }
 }

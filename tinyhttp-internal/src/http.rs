@@ -303,8 +303,8 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
 
     let req_headers = request.get_headers();
 
-    let tmp_str = req_headers.get("accept-encoding").unwrap();
     let comp = if req_headers.contains_key("accept-encoding") {
+        let tmp_str = req_headers.get("accept-encoding").unwrap();
         let res = tmp_str.split(',').map(|s| s.trim()).collect();
 
         #[cfg(feature = "log")]
