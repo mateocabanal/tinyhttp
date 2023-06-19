@@ -10,7 +10,7 @@ version = "0.3.8"
 
 [dependencies]
 mime_guess = "2.0.4"
-openssl = { version = "0.10.40", optional = true }
+openssl = { version = "0.10", optional = true }
 dyn-clone = "1.0.6"
 infer = "0.12.0"
 lazy_static = "1.4.0"

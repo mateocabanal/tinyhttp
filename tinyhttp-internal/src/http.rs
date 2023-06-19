@@ -87,10 +87,16 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         0usize
     };
 
-    let first_header_index = safe_http_index
+    let first_header_index = if let Some(first_header_index) = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i)
-        .unwrap();
+        .map(|(i, _)| i) {
+        first_header_index
+    } else {
+        #[cfg(feature = "log")]
+        log::warn!("no headers found!");
+
+        0usize
+    };
 
     #[cfg(feature = "log")]
     log::trace!(
@@ -130,9 +136,9 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 
     //let headers = parse_headers(http.to_string());
     let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
-    let status_line: Vec<String> = str_status_line.iter().map(|i| String::from(*i)).collect();
+    let status_line: Vec<String> = str_status_line.iter().map(|i| i.to_string()).collect();
     #[cfg(feature = "log")]
-    log::trace!("{:#?}", status_line);
+    log::trace!("{:#?}", str_status_line);
     let body_index = buf
         .windows(4)
         .enumerate()

@@ -12,13 +12,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # Copy the rest
 # Build (install) the actual binaries
-RUN cargo build --release --example heroku-deploy
+RUN cargo build --release --features openssl_vendor --example heroku-deploy
 RUN mkdir /usr/local/cargo/bin -p ; mv ./target/release/examples/heroku-deploy /usr/local/cargo/bin/heroku-deploy
 
 # Runtime image
-FROM debian:sid-slim
+FROM debian:bookworm-slim
 
-RUN apt update -y && apt install wget unzip -y
+RUN apt update -y && apt install wget unzip libssl-dev libssl3 -y
 
 # Run as "app" user
 RUN useradd -ms /bin/bash app

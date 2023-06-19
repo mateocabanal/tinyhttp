@@ -12,7 +12,6 @@ repository = "https://github.com/mateocabanal/tinyhttp"
 
 [dev-dependencies]
 criterion = "0.5.1"
-reqwest = { version = "0.11.11", features = ["blocking"] }
 simple_logger = "4.0.0"
 log = "0.4.17"
 minreq = "2.8.1"
