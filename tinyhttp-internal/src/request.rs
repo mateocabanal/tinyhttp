@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Request {
-    headers: HashMap<String, String>,
+    raw_headers: Vec<String>,
     status_line: Vec<String>,
     body: Vec<u8>,
     wildcard: Option<String>,
@@ -28,30 +28,9 @@ impl Request {
         status_line: Vec<String>,
         wildcard: Option<String>,
     ) -> Request {
-        let mut headers: HashMap<String, String> = HashMap::new();
-        #[cfg(feature = "log")]
-        log::trace!("Headers: {:#?}", raw_headers);
-        for i in raw_headers.iter() {
-            let mut iter = i.split(": ");
-            let key = iter.next().unwrap();
-            let value = iter.next().unwrap();
-
-            /*            match value {
-                            Some(v) => println!("{}", v),
-                            None => {
-                                break;
-                            }
-                        };
-            */
-            headers.insert(key.to_string(), value.to_string());
-        }
-
-        #[cfg(feature = "log")]
-        log::trace!("Request headers: {:?}", headers);
-
         Request {
             body: raw_body.to_vec(),
-            headers,
+            raw_headers,
             status_line,
             wildcard,
             is_http2: false,
@@ -78,8 +57,27 @@ impl Request {
     }
 
     /// Get request headers in a HashMap
-    pub fn get_headers(&self) -> &HashMap<String, String> {
-        &self.headers
+    pub fn get_headers(&self) -> HashMap<String, String> {
+        let mut headers: HashMap<String, String> = HashMap::new();
+
+        #[cfg(feature = "log")]
+        log::trace!("Headers: {:#?}", self.raw_headers);
+
+        for i in self.raw_headers.iter() {
+            let mut iter = i.split(": ");
+            let key = iter.next().unwrap();
+            let value = iter.next().unwrap();
+
+            /*            match value {
+                            Some(v) => println!("{}", v),
+                            None => {
+                                break;
+                            }
+                        };
+            */
+            headers.insert(key.to_string(), value.to_string());
+        }
+        headers
     }
 
     /// Get status line of request

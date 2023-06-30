@@ -54,7 +54,7 @@ impl Response {
     }
 
     pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
-        let line_bytes = self.status_line.as_bytes().to_vec();
+        let line_bytes = self.status_line.as_bytes();
         #[cfg(feature = "log")]
         log::trace!("res status line: {:#?}", self.status_line);
 
@@ -69,12 +69,12 @@ impl Response {
         #[cfg(all(feature = "log", debug_assertions))] 
         {
             log::trace!("HEADER AS STR: {}", String::from_utf8(header_bytes.clone()).unwrap());
-            log::trace!("STATUS LINE AS STR: {}", std::str::from_utf8(line_bytes.as_slice()).unwrap());
+            log::trace!("STATUS LINE AS STR: {}", std::str::from_utf8(line_bytes).unwrap());
         };
 
         let full_req: &[u8] = 
             &[
-                line_bytes.as_slice(),
+                line_bytes,
                 header_bytes.as_slice(),
                 self.body.as_ref().unwrap(),
             ].concat();
