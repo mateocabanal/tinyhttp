@@ -65,7 +65,8 @@
 //! // Example 2: same as example 1, but takes a Request as an argument
 //! #[get("/ex2")]
 //! fn ex2_get(req: Request) -> String {
-//!     let accept_header = req.get_headers().get("accept").unwrap();
+//!     let headers = req.get_headers();
+//!     let accept_header = headers.get("accept").unwrap();
 //!     format!("accept header: {}", accept_header)
 //! }
 //!
