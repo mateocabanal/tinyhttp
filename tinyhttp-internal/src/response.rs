@@ -29,7 +29,6 @@ impl Response {
         }
     }
 
-    #[allow(dead_code)]
     pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
         self.headers = headers;
         self

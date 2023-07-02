@@ -89,7 +89,8 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
 
     let first_header_index = if let Some(first_header_index) = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i) {
+        .map(|(i, _)| i)
+    {
         first_header_index
     } else {
         #[cfg(feature = "log")]
@@ -288,15 +289,21 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     let mut res_brw = response.borrow_mut();
     let mime = res_brw.mime.clone().unwrap();
 
-    let inferred_mime = match infer::get(res_brw.body.as_ref().unwrap()) {
-        Some(mime) => mime.mime_type().to_string(),
-        None => mime,
+    let inferred_mime = if let Some(mime_inferred) = infer::get(res_brw.body.as_ref().unwrap()) {
+        mime_inferred.mime_type().to_string()
+    } else {
+        mime
     };
 
-    if let Some(vec) = config.get_headers() {
-        for (i, j) in vec.iter() {
-            res_brw.headers.insert(i.to_string(), j.to_string());
-        }
+    if let Some(config_headers) = config.get_headers() {
+        res_brw.headers.extend(
+            config_headers
+                .iter()
+                .map(|(i, j)| (i.to_owned(), j.to_owned())),
+        );
+        //        for (i, j) in config_headers.iter() {
+        //            res_brw.headers.insert(i.to_string(), j.to_string());
+        //        }
     }
 
     res_brw
@@ -309,26 +316,32 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
 
     let req_headers = request.get_headers();
 
-    let comp = if req_headers.contains_key("accept-encoding") {
-        let tmp_str = req_headers.get("accept-encoding").unwrap();
-        let res = tmp_str.split(',').map(|s| s.trim()).collect();
-
-        #[cfg(feature = "log")]
-        log::trace!("{:#?}", &res);
-
-        res
-    } else {
-        Vec::new()
-    };
-
+    // Only check for 'accept-encoding' header
+    // when compression is enabled
     #[cfg(feature = "sys")]
-    if config.get_gzip() && comp.contains(&"gzip") {
-        let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-        writer.write_all(res_brw.body.as_ref().unwrap()).unwrap();
-        res_brw.body = Some(writer.finish().unwrap());
-        res_brw
-            .headers
-            .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
+    {
+        if config.get_gzip() {
+            let comp = if req_headers.contains_key("accept-encoding") {
+                let tmp_str = req_headers.get("accept-encoding").unwrap();
+                let res = tmp_str.split(',').map(|s| s.trim()).collect();
+
+                #[cfg(feature = "log")]
+                log::trace!("{:#?}", &res);
+
+                res
+            } else {
+                Vec::new()
+            };
+
+            if config.get_gzip() && comp.contains(&"gzip") {
+                let mut writer = GzEncoder::new(Vec::new(), Compression::default());
+                writer.write_all(res_brw.body.as_ref().unwrap()).unwrap();
+                res_brw.body = Some(writer.finish().unwrap());
+                res_brw
+                    .headers
+                    .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
+            }
+        }
     }
 
     #[cfg(feature = "log")]
@@ -355,7 +368,7 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 }
 
 pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 512;
+    let buffer_size = 1024;
     let mut request_buffer = vec![];
     loop {
         let mut buffer = vec![0; buffer_size];
