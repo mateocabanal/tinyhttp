@@ -5,7 +5,7 @@ use std::{
     iter::FromIterator,
     path::Path,
     rc::Rc,
-    vec,
+    vec, ops::DerefMut,
 };
 
 #[cfg(not(feature = "async"))]
@@ -22,6 +22,7 @@ use async_std::{
     io::{ReadExt, WriteExt},
     task::spawn,
 };
+use lazy_static::__Deref;
 
 use crate::{
     config::{Config, HttpListener},
@@ -351,6 +352,10 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
             res_brw.body.as_ref().unwrap(),
             res_brw.headers,
         );
+    }
+
+    if let Some(middleware) = config.get_middleware() {
+        middleware.lock().unwrap()(res_brw.deref_mut());
     }
 
     res_brw.send(conn);
