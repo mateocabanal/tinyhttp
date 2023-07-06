@@ -94,6 +94,11 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::{atomic::AtomicBool, Mutex, OnceLock},
+        thread::JoinHandle,
+    };
+
     use crate::prelude::*;
 
     fn setup_http_server() -> Result<(), Box<dyn std::error::Error>> {
@@ -105,7 +110,7 @@ mod tests {
         let sock = std::net::TcpListener::bind("127.0.0.1:23195")?;
         let routes = Routes::new(vec![ping()]);
         let config = Config::new().routes(routes);
-        std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             HttpListener::new(sock, config).start();
         });
         Ok(())
@@ -136,7 +141,8 @@ mod tests {
             .clone()
             .first()
             .unwrap()
-            .wildcard().is_none());
+            .wildcard()
+            .is_none());
         let request = Request::new(
             b"Hello",
             vec!["Accept-Encoding: gzip".to_string()],

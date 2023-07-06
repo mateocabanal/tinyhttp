@@ -49,6 +49,10 @@ fn get_return_res(res: Request) -> Response {
 fn main() {
     simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
 
+    let middleware = |res: &mut Response| {
+        res.headers.insert("X-MIDDLEWARE: ".to_string(), "SOMETHING\r\n".to_string());
+    };
+
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![
         get(),
@@ -58,7 +62,7 @@ fn main() {
         post_wildcard(),
         post_return_vec(),
     ]);
-    let config = Config::new().routes(routes).gzip(true);
+    let config = Config::new().routes(routes).gzip(true).middleware(middleware);
     let http = HttpListener::new(socket, config);
 
     http.start();

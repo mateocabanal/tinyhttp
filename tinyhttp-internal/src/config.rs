@@ -26,6 +26,8 @@ use rusty_pool::{Builder, ThreadPool};
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
 
+use std::sync::Mutex;
+
 #[cfg(test)]
 use std::any::Any;
 
@@ -173,6 +175,7 @@ pub struct Config {
     gzip: bool,
     spa: bool,
     http2: bool,
+    middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
 }
 
 impl Default for Config {
@@ -221,6 +224,7 @@ impl Config {
             br: false,
             spa: false,
             http2: false,
+            middleware: None
         }
     }
 
@@ -360,6 +364,11 @@ impl Config {
         self
     }
 
+    pub fn middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
+        self.middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+        self
+    }
+
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }
@@ -418,6 +427,14 @@ impl Config {
 
     pub fn get_spa(&self) -> bool {
         self.spa
+    }
+
+    pub fn get_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
+        if let Some(s) = &self.middleware {
+            Some(Arc::clone(s))
+        } else {
+            None
+        }
     }
 }
 
