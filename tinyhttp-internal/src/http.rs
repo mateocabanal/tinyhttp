@@ -25,7 +25,7 @@ use async_std::{
 
 use crate::{
     config::{Config, HttpListener},
-    request::Request,
+    request::{Request, RequestError},
     response::Response,
 };
 
@@ -69,7 +69,7 @@ pub(crate) fn start_http(http: HttpListener) {
     }
 }
 
-fn build_and_parse_req(buf: Vec<u8>) -> Request {
+fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     #[cfg(feature = "log")]
     log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
 
@@ -84,7 +84,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         #[cfg(feature = "log")]
         log::error!("failed parsing status line!");
 
-        0usize
+        return Err(RequestError::StatusLineErr);
     };
 
     let first_header_index = if let Some(first_header_index) = safe_http_index
@@ -153,7 +153,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
     //        "BODY (TOP): {:#?}",
     //        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
     //    );
-    Request::new(raw_body, headers, status_line, None)
+    Ok(Request::new(raw_body, headers, status_line, None))
 }
 
 fn build_res(req: &mut Request, config: &mut Config) -> Response {
@@ -282,7 +282,21 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
 
 fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     let buf = read_stream(conn);
-    let mut request = build_and_parse_req(buf);
+    let request = build_and_parse_req(buf);
+
+    if let Err(e) = request {
+        let specific_err = match e {
+           RequestError::StatusLineErr => b"failed to parse status line".to_vec(),
+            RequestError::HeadersErr => b"failed to parse headers".to_vec()
+        };
+           Response::new().mime("text/plain").body(specific_err).send(conn);
+           return;
+    }
+
+    // NOTE:
+    // Err has been handled above
+    // Therefore, request should always be Ok
+    let mut request = unsafe { request.unwrap_unchecked() };
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &mut config)));
 

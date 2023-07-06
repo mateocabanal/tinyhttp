@@ -5,7 +5,6 @@ use std::collections::HashMap;
 /// parsed_body which is a Option<String> that can contain the body as a String
 ///
 /// body is used when the body of the request is not a String
-
 #[derive(Clone, Debug)]
 pub struct Request {
     raw_headers: Vec<String>,
@@ -97,4 +96,14 @@ impl Request {
         self.is_http2 = w;
         self
     }
+}
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum RequestError {
+    #[error("failed to parse status line")]
+    StatusLineErr,
+    #[error("failed to parse headers")]
+    HeadersErr
 }
