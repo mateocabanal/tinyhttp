@@ -22,7 +22,6 @@ use async_std::{
     io::{ReadExt, WriteExt},
     task::spawn,
 };
-use lazy_static::__Deref;
 
 use crate::{
     config::{Config, HttpListener},
