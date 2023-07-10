@@ -38,7 +38,7 @@ fn post_return_vec() -> Vec<u8> {
 fn get_return_res(res: Request) -> Response {
     if res.get_status_line()[1] == "/return_res" {
         Response::new()
-            .status_line("HTTP/1.1 200 OK")
+            .status_line("HTTP/1.1 200 OK\r\n")
             .body(b"Hello, from response!\r\n".to_vec())
             .mime("text/plain")
     } else {
