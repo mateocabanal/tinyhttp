@@ -313,7 +313,7 @@ impl ToResponse for BasicPostRoute {
         Response::new()
             .body(self.post_body.unwrap()())
             .mime("text/plain")
-            .status_line("HTTP/1.1 200 OK")
+            .status_line("HTTP/1.1 200 OK\r\n")
     }
 }
 
@@ -381,7 +381,7 @@ impl ToResponse for PostRouteWithReq {
         Response::new()
             .body(self.post_body.unwrap()(req))
             .mime("text/plain")
-            .status_line("HTTP/1.1 200 OK")
+            .status_line("HTTP/1.1 200 OK\r\n")
     }
 }
 

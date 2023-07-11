@@ -35,7 +35,8 @@ impl Response {
     }
 
     pub fn status_line<P: Into<String>>(mut self, line: P) -> Self {
-        self.status_line = line.into();
+        let line_str = line.into();
+        self.status_line = line_str.trim().to_string() + "\r\n";
         self
     }
 
