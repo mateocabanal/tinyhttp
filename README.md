@@ -38,7 +38,7 @@ fn post() -> &'static str {
 }
 
 // Example 1: Can return anything that implements Into<Vec<u8>>
-#[get("/")]
+#[get("/ex1")]
 fn ex1_get() -> &'static str {
   "Hello World!"
 }
@@ -61,7 +61,7 @@ fn ex3_get(req: Request) -> Response {
 
 fn main() {
   let socket = TcpListener::bind(":::9001").unwrap();
-  let routes = Routes::new(vec![get(), post()]);
+  let routes = Routes::new(vec![get(), post(), ex1_get(), ex2_get(), ex3_get()]);
   let config = Config::new().routes(routes);
   let http = HttpListener::new(socket, config);
 
