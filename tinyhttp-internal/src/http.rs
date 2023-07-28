@@ -297,6 +297,10 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     // Err has been handled above
     // Therefore, request should always be Ok
     let mut request = unsafe { request.unwrap_unchecked() };
+    
+    if let Some(req_middleware) = config.get_request_middleware() {
+        req_middleware.lock().unwrap()(&mut request);
+    };
 
     let response = Rc::new(RefCell::new(build_res(&mut request, &mut config)));
 
@@ -367,7 +371,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         );
     }
 
-    if let Some(middleware) = config.get_middleware() {
+    if let Some(middleware) = config.get_response_middleware() {
         middleware.lock().unwrap()(res_brw.deref_mut());
     }
 

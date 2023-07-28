@@ -62,7 +62,7 @@ fn main() {
         post_wildcard(),
         post_return_vec(),
     ]);
-    let config = Config::new().routes(routes).gzip(true).middleware(middleware);
+    let config = Config::new().routes(routes).gzip(true).response_middleware(middleware);
     let http = HttpListener::new(socket, config);
 
     http.start();

@@ -175,7 +175,8 @@ pub struct Config {
     gzip: bool,
     spa: bool,
     http2: bool,
-    middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
+    response_middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
+    request_middleware: Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>>
 }
 
 impl Default for Config {
@@ -224,7 +225,8 @@ impl Config {
             br: false,
             spa: false,
             http2: false,
-            middleware: None
+            request_middleware: None,
+            response_middleware: None
         }
     }
 
@@ -364,8 +366,13 @@ impl Config {
         self
     }
 
-    pub fn middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
-        self.middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+    pub fn request_middleware<F: FnMut(&mut Request) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
+        self.request_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+        self
+    }
+
+    pub fn response_middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
+        self.response_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
         self
     }
 
@@ -429,8 +436,16 @@ impl Config {
         self.spa
     }
 
-    pub fn get_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
-        if let Some(s) = &self.middleware {
+    pub(crate) fn get_request_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
+        if let Some(s) = &self.request_middleware {
+            Some(Arc::clone(s))
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn get_response_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
+        if let Some(s) = &self.response_middleware {
             Some(Arc::clone(s))
         } else {
             None
