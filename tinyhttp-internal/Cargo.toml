@@ -17,10 +17,6 @@ num_cpus = "1.16.0"
 rusty_pool = "0.7.0"
 thiserror = "1"
 
-
-#async-std = { version = "1.12.0", features = ["attributes"], optional = true }
-#futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
-
 [dependencies.flate2]
 features = ["miniz-sys"]
 version = "1"
@@ -31,10 +27,16 @@ features = ["std"]
 version = "0.4"
 optional = true
 
+[dependencies.tokio]
+features = ["rt-multi-thread", "io-util", "net", "macros", "fs"]
+version = "1.3"
+optional = true
+
 [features]
-default = ["sys", "log"]
+default = ["sys", "log", "async"]
 openssl_vendor = ["ssl", "openssl?/vendored"]
-#async = ["dep:async-std", "dep:futures"]
+middleware = []
+async = ["dep:tokio"]
 ssl = ["dep:openssl"]
 sys = ["ssl", "dep:flate2"]
 log = ["dep:log"]

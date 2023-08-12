@@ -3,6 +3,9 @@ use std::{
     io::{Read, Write},
 };
 
+#[cfg(feature = "async")]
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 #[derive(Clone, Debug)]
 pub struct Response {
     pub headers: HashMap<String, String>,
@@ -53,6 +56,7 @@ impl Response {
         self
     }
 
+    #[cfg(not(feature = "async"))]
     pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
         let line_bytes = self.status_line.as_bytes();
         #[cfg(feature = "log")]
@@ -66,19 +70,61 @@ impl Response {
 
         header_bytes.extend(b"\r\n");
 
-        #[cfg(all(feature = "log", debug_assertions))] 
+        #[cfg(all(feature = "log", debug_assertions))]
         {
-            log::trace!("HEADER AS STR: {}", String::from_utf8(header_bytes.clone()).unwrap());
-            log::trace!("STATUS LINE AS STR: {}", std::str::from_utf8(line_bytes).unwrap());
+            log::trace!(
+                "HEADER AS STR: {}",
+                String::from_utf8(header_bytes.clone()).unwrap()
+            );
+            log::trace!(
+                "STATUS LINE AS STR: {}",
+                std::str::from_utf8(line_bytes).unwrap()
+            );
         };
 
-        let full_req: &[u8] = 
-            &[
-                line_bytes,
-                header_bytes.as_slice(),
-                self.body.as_ref().unwrap(),
-            ].concat();
+        let full_req: &[u8] = &[
+            line_bytes,
+            header_bytes.as_slice(),
+            self.body.as_ref().unwrap(),
+        ]
+        .concat();
 
         sock.write_all(full_req).unwrap();
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) async fn send<P: AsyncReadExt + AsyncWriteExt + Unpin>(&self, sock: &mut P) {
+        let line_bytes = self.status_line.as_bytes();
+        #[cfg(feature = "log")]
+        log::trace!("res status line: {:#?}", self.status_line);
+
+        let mut header_bytes: Vec<u8> = self
+            .headers
+            .iter()
+            .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()].concat())
+            .collect();
+
+        header_bytes.extend(b"\r\n");
+
+        #[cfg(all(feature = "log", debug_assertions))]
+        {
+            log::trace!(
+                "HEADER AS STR: {}",
+                String::from_utf8(header_bytes.clone()).unwrap()
+            );
+            log::trace!(
+                "STATUS LINE AS STR: {}",
+                std::str::from_utf8(line_bytes).unwrap()
+            );
+        };
+
+        let full_req: &[u8] = &[
+            line_bytes,
+            header_bytes.as_slice(),
+            self.body.as_ref().unwrap(),
+        ]
+        .concat();
+
+        sock.write_all(full_req).await.unwrap();
     }
 }
