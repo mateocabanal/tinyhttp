@@ -1,56 +1,26 @@
-use std::{
-    cell::RefCell,
-    io::{self, BufReader},
-    iter::FromIterator,
-    ops::DerefMut,
-    path::Path,
-    rc::Rc,
-    vec,
+use std::cell::RefCell;
+use std::path::Path;
+use std::rc::Rc;
+
+
+use tokio::{fs::File, io::AsyncReadExt, io::AsyncWriteExt, select};
+
+use crate::{
+    config::{Config, HttpListener},
+    request::{Request, RequestError},
+    response::Response,
 };
 
 
-use std::{fs::File, io::Read, io::Write};
-
-#[cfg(feature = "sys")]
-use flate2::{write::GzEncoder, Compression};
-
-
-pub(crate) fn start_http(http: HttpListener) {
-    for stream in http.get_stream() {
-        let mut conn = stream.unwrap();
+pub(crate) async fn start_http(http: HttpListener) {
+    loop {
         let config = http.config.clone();
-
-        if http.config.ssl && cfg!(feature = "ssl") {
-            #[cfg(feature = "ssl")]
-            let acpt = http.ssl_acpt.clone().unwrap();
-            #[cfg(feature = "ssl")]
-            http.pool.execute(move || match acpt.accept(conn) {
-                Ok(mut s) => {
-                    #[cfg(feature = "log")]
-                    log::trace!("parse_request() called");
-
-                    parse_request(&mut s, config);
-                }
-                Err(s) => {
-                    #[cfg(feature = "log")]
-                    log::error!("{}", s);
-                }
-            });
-        } else if http.use_pool {
-            http.pool.execute(move || {
-                #[cfg(feature = "log")]
-                log::trace!("parse_request() called");
-
-                parse_request(&mut conn, config);
-            });
-        } else {
-            #[cfg(feature = "log")]
-            log::trace!("parse_request() called");
-
-            parse_request(&mut conn, config);
+        select! {
+            result = http.socket.accept() => {
+                let (mut conn, _) = result.unwrap();
+                    parse_request(&mut conn, config).await;
+            }
         }
-
-        //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
     }
 }
 
@@ -141,8 +111,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     Ok(Request::new(raw_body, headers, status_line, None))
 }
 
-
-fn build_res(req: &mut Request, config: &mut Config) -> Response {
+async fn build_res(req: &mut Request, config: &mut Config) -> Response {
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
@@ -182,7 +151,9 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                 Some(old_path) => {
                     let path = old_path.to_owned() + &status_line[1];
                     if Path::new(&path).extension().is_none() && config.get_spa() {
-                        let body = read_to_vec(old_path.to_owned() + "/index.html").unwrap();
+                        let body = read_to_vec(old_path.to_owned() + "/index.html")
+                            .await
+                            .unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
 
                         Response::new()
@@ -190,7 +161,7 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                             .body(body)
                             .mime("text/html")
                     } else if Path::new(&path).is_file() {
-                        let body = read_to_vec(&path).unwrap();
+                        let body = read_to_vec(&path).await.unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
                         let mime = mime_guess::from_path(&path)
                             .first_raw()
@@ -198,7 +169,7 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                         Response::new().status_line(line).body(body).mime(mime)
                     } else if Path::new(&path).is_dir() {
                         if Path::new(&(path.to_owned() + "/index.html")).is_file() {
-                            let body = read_to_vec(path + "/index.html").unwrap();
+                            let body = read_to_vec(path + "/index.html").await.unwrap();
 
                             let line = "HTTP/1.1 200 OK\r\n";
                             Response::new()
@@ -212,7 +183,7 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                                 .mime("text/html")
                         }
                     } else if Path::new(&(path.to_owned() + ".html")).is_file() {
-                        let body = read_to_vec(path + ".html").unwrap();
+                        let body = read_to_vec(path + ".html").await.unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
                         Response::new()
                             .status_line(line)
@@ -267,8 +238,48 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
 }
 
 
-fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
-    let buf = read_stream(conn);
+pub(crate) async fn read_stream<P: AsyncReadExt + Unpin>(stream: &mut P) -> Vec<u8> {
+    let buffer_size = 1024;
+    let mut request_buffer = vec![];
+    loop {
+        let mut buffer = vec![0; buffer_size];
+        match stream.read(&mut buffer).await {
+            Ok(n) => {
+                if n == 0 {
+                    break;
+                } else if n < buffer_size {
+                    request_buffer.append(&mut buffer[..n].to_vec());
+                    break;
+                } else {
+                    request_buffer.append(&mut buffer);
+                }
+            }
+            Err(e) => {
+                println!("Error: Could not read string!: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    request_buffer
+}
+
+
+pub async fn read_to_vec<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+    async fn inner(path: &Path) -> std::io::Result<Vec<u8>> {
+        use tokio::io::BufReader;
+        let file = File::open(path).await.unwrap();
+        let mut content: Vec<u8> = Vec::new();
+        let mut reader = BufReader::new(file);
+        reader.read_to_end(&mut content).await.unwrap();
+        Ok(content)
+    }
+    inner(path.as_ref()).await
+}
+
+
+async fn parse_request<P: AsyncReadExt + AsyncWriteExt + Unpin>(conn: &mut P, mut config: Config) {
+    let buf = read_stream(conn).await;
     let request = build_and_parse_req(buf);
 
     if let Err(e) = request {
@@ -279,7 +290,8 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         Response::new()
             .mime("text/plain")
             .body(specific_err)
-            .send(conn);
+            .send(conn)
+            .await;
         return;
     }
 
@@ -287,12 +299,13 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     // Err has been handled above
     // Therefore, request should always be Ok
     let mut request = unsafe { request.unwrap_unchecked() };
+
     #[cfg(feature = "middleware")]
     if let Some(req_middleware) = config.get_request_middleware() {
         req_middleware.lock().unwrap()(&mut request);
     };
 
-    let response = Rc::new(RefCell::new(build_res(&mut request, &mut config)));
+    let response = Rc::new(RefCell::new(build_res(&mut request, &mut config).await));
 
     let mut res_brw = response.borrow_mut();
     let mime = res_brw.mime.clone().unwrap();
@@ -324,34 +337,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
 
     let req_headers = request.get_headers();
 
-    // Only check for 'accept-encoding' header
-    // when compression is enabled
-    #[cfg(feature = "sys")]
-    {
-        if config.get_gzip() {
-            let comp = if req_headers.contains_key("accept-encoding") {
-                let tmp_str = req_headers.get("accept-encoding").unwrap();
-                let res = tmp_str.split(',').map(|s| s.trim()).collect();
-
-                #[cfg(feature = "log")]
-                log::trace!("{:#?}", &res);
-
-                res
-            } else {
-                Vec::new()
-            };
-
-            if config.get_gzip() && comp.contains(&"gzip") {
-                let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-                writer.write_all(res_brw.body.as_ref().unwrap()).unwrap();
-                res_brw.body = Some(writer.finish().unwrap());
-                res_brw
-                    .headers
-                    .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
-            }
-        }
-    }
-
     #[cfg(feature = "log")]
     {
         log::trace!(
@@ -366,44 +351,5 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         middleware.lock().unwrap()(res_brw.deref_mut());
     }
 
-    res_brw.send(conn);
-}
-
-
-pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    fn inner(path: &Path) -> io::Result<Vec<u8>> {
-        let file = File::open(path).unwrap();
-        let mut content: Vec<u8> = Vec::new();
-        let mut reader = BufReader::new(file);
-        reader.read_to_end(&mut content).unwrap();
-        Ok(content)
-    }
-    inner(path.as_ref())
-}
-
-
-pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 1024;
-    let mut request_buffer = vec![];
-    loop {
-        let mut buffer = vec![0; buffer_size];
-        match stream.read(&mut buffer) {
-            Ok(n) => {
-                if n == 0 {
-                    break;
-                } else if n < buffer_size {
-                    request_buffer.append(&mut buffer[..n].to_vec());
-                    break;
-                } else {
-                    request_buffer.append(&mut buffer);
-                }
-            }
-            Err(e) => {
-                println!("Error: Could not read string!: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-
-    request_buffer
+    res_brw.send(conn).await;
 }
