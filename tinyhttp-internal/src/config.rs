@@ -7,16 +7,7 @@ use std::fmt::Debug;
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
-#[cfg(feature = "async")]
-use crate::async_http::start_http;
 
-#[cfg(feature = "async")]
-use async_std::net::{Incoming, TcpListener};
-
-#[cfg(feature = "async")]
-use futures::executor::{ThreadPool, ThreadPoolBuilder};
-
-#[cfg(not(feature = "async"))]
 use crate::http::start_http;
 
 use crate::response::Response;
@@ -25,6 +16,9 @@ use rusty_pool::{Builder, ThreadPool};
 
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
+
+#[cfg(feature = "async")]
+use tokio::{net::TcpListener};
 
 use std::sync::Mutex;
 
@@ -60,7 +54,7 @@ impl Clone for Box<dyn Route> {
 }
 
 pub struct HttpListener {
-    socket: TcpListener,
+    pub(crate) socket: TcpListener,
     pub config: Config,
     pub pool: ThreadPool,
     pub use_pool: bool,
@@ -82,13 +76,7 @@ impl HttpListener {
             HttpListener {
                 socket: socket.into(),
                 config,
-                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::default(),
-                #[cfg(feature = "async")]
-                pool: ThreadPoolBuilder::new()
-                    .pool_size(num_cpus::get())
-                    .create()
-                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt,
                 use_pool: true,
@@ -97,13 +85,7 @@ impl HttpListener {
             HttpListener {
                 socket: socket.into(),
                 config,
-                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::default(),
-                #[cfg(feature = "async")]
-                pool: ThreadPoolBuilder::new()
-                    .pool_size(num_cpus::get())
-                    .create()
-                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt: None,
                 use_pool: true,
@@ -112,14 +94,8 @@ impl HttpListener {
     }
 
     pub fn threads(mut self, threads: usize) -> Self {
-        #[cfg(not(feature = "async"))]
         let pool = Builder::new().core_size(threads).build();
 
-        #[cfg(feature = "async")]
-        let pool = ThreadPoolBuilder::new()
-            .pool_size(threads)
-            .create()
-            .unwrap();
 
         self.pool = pool;
         self
@@ -136,13 +112,15 @@ impl HttpListener {
     }
 
     #[cfg(feature = "async")]
-    pub async fn start_async(self) {
+    pub async fn start(self) {
         start_http(self).await;
     }
 
+    #[cfg(not(feature = "async"))]
     pub fn get_stream(&self) -> Incoming<'_> {
         self.socket.incoming()
     }
+
 }
 
 #[derive(Clone)]
