@@ -298,6 +298,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     // Therefore, request should always be Ok
     let mut request = unsafe { request.unwrap_unchecked() };
     
+    #[cfg(feature = "middleware")]
     if let Some(req_middleware) = config.get_request_middleware() {
         req_middleware.lock().unwrap()(&mut request);
     };
@@ -371,6 +372,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         );
     }
 
+    #[cfg(feature = "middleware")]
     if let Some(middleware) = config.get_response_middleware() {
         middleware.lock().unwrap()(res_brw.deref_mut());
     }
