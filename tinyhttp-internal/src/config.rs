@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
 
-use crate::http::start_http;
 
 use crate::response::Response;
 
@@ -17,8 +16,14 @@ use rusty_pool::{Builder, ThreadPool};
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
 
+#[cfg(not(feature = "async"))]
+use crate::http::start_http;
+
 #[cfg(feature = "async")]
 use tokio::{net::TcpListener};
+
+#[cfg(feature = "async")]
+use crate::async_http::start_http;
 
 use std::sync::Mutex;
 

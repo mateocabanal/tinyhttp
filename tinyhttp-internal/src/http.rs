@@ -21,6 +21,12 @@ use crate::{
 use flate2::{write::GzEncoder, Compression};
 
 
+use crate::{
+    config::{Config, HttpListener},
+    request::{Request, RequestError},
+    response::Response,
+};
+
 pub(crate) fn start_http(http: HttpListener) {
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
