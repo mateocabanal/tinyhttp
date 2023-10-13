@@ -322,8 +322,8 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
 
     res_brw.headers.insert(
-        "tinyhttp:".to_string(),
-        option_env!("CARGO_PKG_VERSION").unwrap().to_string(),
+        "tinyhttp: ".to_string(),
+        option_env!("CARGO_PKG_VERSION").unwrap().to_string() + "\r\n",
     );
 
     let req_headers = request.get_headers();

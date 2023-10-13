@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp"
-version = "0.4.0-rc1"
+version = "0.4.0-rc2"
 dependencies = [
  "criterion",
  "log",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp-codegen"
-version = "0.4.0-rc1"
+version = "0.4.0-rc2"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhttp-internal"
-version = "0.4.0-rc1"
+version = "0.4.0-rc2"
 dependencies = [
  "dyn-clone",
  "flate2",
