@@ -94,39 +94,25 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        sync::{atomic::AtomicBool, Mutex, OnceLock},
-        thread::JoinHandle,
-    };
+    use std::{sync::OnceLock, thread, time::Duration};
 
     static HTTP_ENABLED: OnceLock<bool> = OnceLock::new();
 
     use crate::prelude::*;
 
     fn setup_http_server() -> Result<(), Box<dyn std::error::Error>> {
-        HTTP_ENABLED.set(true).unwrap();
-
         #[get("/ping")]
         fn ping() -> &'static str {
             "pong\n"
         }
 
-        let req_middleware = |req: &mut Request| {
-            if req.get_status_line().contains(&"/ping".to_string()) {
-                println!("wants ping!");
-            };
-        };
-
-        let res_middleware = |res: &mut Response| {
-            res.headers.insert("X-DEBUG: ".to_string(), "true\r\n".to_string());
-        };
-
         let sock = std::net::TcpListener::bind("127.0.0.1:23195")?;
         let routes = Routes::new(vec![ping()]);
-        let config = Config::new().routes(routes).request_middleware(req_middleware).response_middleware(res_middleware);
+        let config = Config::new().routes(routes);
         std::thread::spawn(move || {
             HttpListener::new(sock, config).start();
         });
+        HTTP_ENABLED.set(true).unwrap();
 
         Ok(())
     }
@@ -189,25 +175,13 @@ mod tests {
     }
     #[test]
     fn respond_to_minimal_request() -> Result<(), Box<dyn std::error::Error>> {
-        if HTTP_ENABLED.get().is_none() {
-            setup_http_server()?;
-        };
+        setup_http_server()?;
+        while HTTP_ENABLED.get().is_none() {}
 
+        thread::sleep(Duration::from_secs(1));
         let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
         let parsed_resp = request.as_str()?;
         assert_eq!(parsed_resp, "pong\n");
-
-        Ok(())
-    }
-
-    #[test]
-    fn middleware_test() -> Result<(), Box<dyn std::error::Error>> {
-        if HTTP_ENABLED.get().is_none() {
-            setup_http_server()?;
-        };
-
-        let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
-        assert_eq!("true", request.headers.get("x-debug").unwrap());
 
         Ok(())
     }

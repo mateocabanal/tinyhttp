@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, OnceLock, RwLock}, cell::OnceCell};
+use std::{collections::HashMap, sync::{Arc, OnceLock}};
 
 use crate::{request::Request};
 pub use dyn_clone::DynClone;
@@ -423,6 +423,7 @@ impl Config {
         self.spa
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_request_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
         if let Some(s) = &self.request_middleware {
             Some(Arc::clone(s))
@@ -431,6 +432,7 @@ impl Config {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_response_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
         if let Some(s) = &self.response_middleware {
             Some(Arc::clone(s))

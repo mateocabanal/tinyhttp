@@ -1,9 +1,7 @@
 use std::{
     cell::RefCell,
-    ffi::CStr,
     io::{self, BufReader},
     iter::FromIterator,
-    ops::DerefMut,
     path::Path,
     rc::Rc,
     vec,
