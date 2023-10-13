@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    ffi::CStr,
     io::{self, BufReader},
     iter::FromIterator,
     ops::DerefMut,
@@ -282,12 +283,14 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
             .mime("text/plain")
             .body(specific_err)
             .send(conn);
+
         return;
     }
 
     // NOTE:
     // Err has been handled above
     // Therefore, request should always be Ok
+
     let mut request = unsafe { request.unwrap_unchecked() };
     #[cfg(feature = "middleware")]
     if let Some(req_middleware) = config.get_request_middleware() {
