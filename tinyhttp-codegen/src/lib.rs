@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, sync::OnceLock};
 
 use proc_macro::TokenStream;
 use quote::quote;

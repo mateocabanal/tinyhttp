@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, OnceLock, RwLock}, cell::OnceCell};
 
 use crate::{request::Request};
 pub use dyn_clone::DynClone;
@@ -31,6 +31,10 @@ use std::sync::Mutex;
 use std::any::Any;
 
 type RouteVec = Vec<Box<dyn Route>>;
+
+pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> = OnceLock::new();
+
+pub static POST_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug)]
 pub enum Method {

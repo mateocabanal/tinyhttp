@@ -8,7 +8,6 @@ use std::{
     vec,
 };
 
-
 use std::{fs::File, io::Read, io::Write};
 
 use crate::{
@@ -19,7 +18,6 @@ use crate::{
 
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
-
 
 pub(crate) fn start_http(http: HttpListener) {
     for stream in http.get_stream() {
@@ -147,7 +145,6 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     Ok(Request::new(raw_body, headers, status_line, None))
 }
 
-
 fn build_res(req: &mut Request, config: &mut Config) -> Response {
     let status_line = req.get_status_line();
     let req_path = Rc::new(RefCell::new(status_line[1].clone()));
@@ -272,7 +269,6 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
     }
 }
 
-
 fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     let buf = read_stream(conn);
     let request = build_and_parse_req(buf);
@@ -324,9 +320,10 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         .headers
         .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
 
-    res_brw
-        .headers
-        .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
+    res_brw.headers.insert(
+        "tinyhttp:".to_string(),
+        option_env!("CARGO_PKG_VERSION").unwrap().to_string(),
+    );
 
     let req_headers = request.get_headers();
 
@@ -375,7 +372,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     res_brw.send(conn);
 }
 
-
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     fn inner(path: &Path) -> io::Result<Vec<u8>> {
         let file = File::open(path).unwrap();
@@ -386,7 +382,6 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     }
     inner(path.as_ref())
 }
-
 
 pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
     let buffer_size = 1024;
