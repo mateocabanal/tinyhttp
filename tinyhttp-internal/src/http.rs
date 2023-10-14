@@ -326,12 +326,11 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         option_env!("CARGO_PKG_VERSION").unwrap().to_string() + "\r\n",
     );
 
-    let req_headers = request.get_headers();
-
     // Only check for 'accept-encoding' header
     // when compression is enabled
     #[cfg(feature = "sys")]
     {
+        let req_headers = request.get_headers();
         if config.get_gzip() {
             let comp = if req_headers.contains_key("accept-encoding") {
                 let tmp_str = req_headers.get("accept-encoding").unwrap();
