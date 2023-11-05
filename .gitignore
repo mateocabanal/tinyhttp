@@ -7,3 +7,4 @@ heroku-html/
 build.sh
 RustConfig
 Procfile
+Cargo.lock
