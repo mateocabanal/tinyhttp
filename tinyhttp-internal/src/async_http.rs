@@ -346,10 +346,10 @@ async fn parse_request<P: AsyncReadExt + AsyncWriteExt + Unpin>(conn: &mut P, mu
         );
     }
 
-    #[cfg(feature = "middleware")]
-    if let Some(middleware) = config.get_response_middleware() {
-        middleware.lock().unwrap()(res_brw.deref_mut());
-    }
+//    #[cfg(feature = "middleware")]
+//    if let Some(middleware) = config.get_response_middleware() {
+//        middleware.lock().unwrap()(res_brw.deref_mut());
+//    }
 
     res_brw.send(conn).await;
 }
