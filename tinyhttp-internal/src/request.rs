@@ -45,7 +45,7 @@ impl Request {
     }
 
     /// Get request body as bytes
-    pub fn get_raw_body(&self) -> &Vec<u8> {
+    pub fn get_raw_body(&self) -> &[u8] {
         &self.body
     }
 
@@ -59,27 +59,14 @@ impl Request {
     }
 
     /// Get request headers in a HashMap
-    pub fn get_headers(&self) -> HashMap<String, String> {
-        let mut headers: HashMap<String, String> = HashMap::new();
-
+    pub fn get_headers(&self) -> HashMap<&str, &str> {
         #[cfg(feature = "log")]
         log::trace!("Headers: {:#?}", self.raw_headers);
-
-        for i in self.raw_headers.iter() {
-            let mut iter = i.split(": ");
-            let key = iter.next().unwrap();
-            let value = iter.next().unwrap();
-
-            /*            match value {
-                            Some(v) => println!("{}", v),
-                            None => {
-                                break;
-                            }
-                        };
-            */
-            headers.insert(key.to_string(), value.to_string());
-        }
-        headers
+        self.raw_headers
+            .iter()
+            .map(|i| i.split(": "))
+            .map(|mut i| (i.next().unwrap(), i.next().unwrap()))
+            .collect::<HashMap<&str, &str>>()
     }
 
     /// Get status line of request
@@ -108,5 +95,5 @@ pub enum RequestError {
     #[error("failed to parse status line")]
     StatusLineErr,
     #[error("failed to parse headers")]
-    HeadersErr
+    HeadersErr,
 }

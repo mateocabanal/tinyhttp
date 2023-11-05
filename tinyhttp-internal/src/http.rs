@@ -144,28 +144,25 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     Ok(Request::new(raw_body, headers, status_line, None))
 }
 
-fn build_res(req: &mut Request, config: &mut Config) -> Response {
+fn build_res(mut req: Request, config: &Config) -> Response {
     let status_line = req.get_status_line();
-    let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
-    log::trace!("build_res -> req_path: {}", req_path.borrow());
+    log::trace!("build_res -> req_path: {}", status_line[1]);
 
     match status_line[0].as_str() {
-        "GET" => match config.get_routes(&mut req_path.borrow_mut()) {
+        "GET" => match config.get_routes(&status_line[1]) {
             Some(route) => {
                 #[cfg(feature = "log")]
                 log::trace!("Found path in routes!");
 
-                let req_new = if route.wildcard().is_some() {
+                if route.wildcard().is_some() {
                     let stat_line = &status_line[1];
                     let split = stat_line
                         .split(&(route.get_path().to_string() + "/"))
                         .last()
                         .unwrap();
 
-                    req.set_wildcard(Some(split.into()))
-                } else {
-                    req
+                    req.set_wildcard(Some(split.into()));
                 };
 
                 /*if route.is_ret_res() {
@@ -177,7 +174,7 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                         .mime("text/plain")
                 }*/
 
-                route.to_res(req_new.to_owned())
+                route.to_res(req)
             }
 
             None => match config.get_mount() {
@@ -234,12 +231,12 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                     .mime("text/html"),
             },
         },
-        "POST" => match config.post_routes(&mut req_path.borrow_mut()) {
+        "POST" => match config.post_routes(&status_line[1]) {
             Some(route) => {
                 #[cfg(feature = "log")]
                 log::debug!("POST");
 
-                let req_new = if route.wildcard().is_some() {
+                if route.wildcard().is_some() {
                     let stat_line = &status_line[1];
 
                     let split = stat_line
@@ -247,12 +244,10 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
                         .last()
                         .unwrap();
 
-                    req.set_wildcard(Some(split.into()))
-                } else {
-                    req
+                    req.set_wildcard(Some(split.into()));
                 };
 
-                route.to_res(req_new.to_owned())
+                route.to_res(req)
             }
 
             None => Response::new()
@@ -268,7 +263,7 @@ fn build_res(req: &mut Request, config: &mut Config) -> Response {
     }
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
+fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let buf = read_stream(conn);
     let request = build_and_parse_req(buf);
 
@@ -289,25 +284,41 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     // Err has been handled above
     // Therefore, request should always be Ok
 
-    let mut request = unsafe { request.unwrap_unchecked() };
-    #[cfg(feature = "middleware")]
+    let request = unsafe { request.unwrap_unchecked() };
+    /*#[cfg(feature = "middleware")]
     if let Some(req_middleware) = config.get_request_middleware() {
         req_middleware.lock().unwrap()(&mut request);
+    };*/
+    let req_headers = request.get_headers();
+    let _comp = if config.get_gzip() {
+        let i = if req_headers.contains_key("accept-encoding") {
+            let tmp_str = req_headers.get("accept-encoding").unwrap();
+            let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
+
+            #[cfg(feature = "log")]
+            log::trace!("{:#?}", &res);
+
+            res.contains(&"gzip")
+        } else {
+            false
+        };
+        i
+    } else {
+        false
     };
 
-    let response = Rc::new(RefCell::new(build_res(&mut request, &mut config)));
+    let mut response = build_res(request, &config);
 
-    let mut res_brw = response.borrow_mut();
-    let mime = res_brw.mime.clone().unwrap();
+    let mime = response.mime.as_ref().unwrap();
 
-    let inferred_mime = if let Some(mime_inferred) = infer::get(res_brw.body.as_ref().unwrap()) {
-        mime_inferred.mime_type().to_string()
+    let inferred_mime = if let Some(mime_inferred) = infer::get(response.body.as_ref().unwrap()) {
+        mime_inferred.mime_type()
     } else {
-        mime
+        mime.as_str()
     };
 
     if let Some(config_headers) = config.get_headers() {
-        res_brw.headers.extend(
+        response.headers.extend(
             config_headers
                 .iter()
                 .map(|(i, j)| (i.to_owned(), j.to_owned())),
@@ -317,41 +328,29 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
         //        }
     }
 
-    res_brw
-        .headers
-        .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
-
-    res_brw.headers.insert(
-        "tinyhttp: ".to_string(),
-        option_env!("CARGO_PKG_VERSION").unwrap().to_string() + "\r\n",
-    );
+    response.headers.extend([
+        (
+            "Content-Type: ".to_string(),
+            inferred_mime.to_owned() + "\r\n",
+        ),
+        (
+            "tinyhttp: ".to_string(),
+            env!("CARGO_PKG_VERSION").to_string() + "\r\n",
+        ),
+    ]);
 
     // Only check for 'accept-encoding' header
     // when compression is enabled
+
     #[cfg(feature = "sys")]
     {
-        let req_headers = request.get_headers();
-        if config.get_gzip() {
-            let comp = if req_headers.contains_key("accept-encoding") {
-                let tmp_str = req_headers.get("accept-encoding").unwrap();
-                let res = tmp_str.split(',').map(|s| s.trim()).collect();
-
-                #[cfg(feature = "log")]
-                log::trace!("{:#?}", &res);
-
-                res
-            } else {
-                Vec::new()
-            };
-
-            if config.get_gzip() && comp.contains(&"gzip") {
-                let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-                writer.write_all(res_brw.body.as_ref().unwrap()).unwrap();
-                res_brw.body = Some(writer.finish().unwrap());
-                res_brw
-                    .headers
-                    .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
-            }
+        if _comp {
+            let mut writer = GzEncoder::new(Vec::new(), Compression::default());
+            writer.write_all(response.body.as_ref().unwrap()).unwrap();
+            response.body = Some(writer.finish().unwrap());
+            response
+                .headers
+                .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
         }
     }
 
@@ -359,17 +358,17 @@ fn parse_request<P: Read + Write>(conn: &mut P, mut config: Config) {
     {
         log::trace!(
             "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-            res_brw.body.as_ref().unwrap(),
-            res_brw.headers,
+            response.body.as_ref().unwrap(),
+            response.headers,
         );
     }
 
-    #[cfg(feature = "middleware")]
+    /*#[cfg(feature = "middleware")]
     if let Some(middleware) = config.get_response_middleware() {
         middleware.lock().unwrap()(res_brw.deref_mut());
-    }
+    }*/
 
-    res_brw.send(conn);
+    response.send(conn);
 }
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {

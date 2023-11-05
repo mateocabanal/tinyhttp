@@ -378,9 +378,13 @@ impl Config {
     pub fn get_mount(&self) -> Option<&String> {
         self.mount_point.as_ref()
     }
-    pub fn get_routes(&mut self, path: &mut String) -> Option<Box<dyn Route>> {
-        if path.ends_with('/') && path.matches('/').count() > 1 {
-            path.pop();
+    pub fn get_routes(&self, path: &str) -> Option<Box<dyn Route>> {
+        let path = if path.ends_with('/') && path.matches('/').count() > 1 {
+            let mut chars = path.chars();
+            chars.next_back();
+            chars.as_str()
+        } else {
+            path
         };
 
         #[cfg(feature = "log")]
@@ -399,11 +403,16 @@ impl Config {
         None
     }
 
-    pub fn post_routes(&mut self, path: &mut String) -> Option<Box<dyn Route>> {
+    pub fn post_routes(&self, path: &str) -> Option<Box<dyn Route>> {
         #[cfg(feature = "log")]
         log::trace!("post_routes -> path: {}", path);
-        if path.ends_with('/') && path.matches('/').count() > 1 {
-            path.pop();
+
+        let path = if path.ends_with('/') && path.matches('/').count() > 1 {
+            let mut chars = path.chars();
+            chars.next_back();
+            chars.as_str()
+        } else {
+            path
         };
 
         let route = self.post_routes.as_ref()?.get(path);

@@ -98,16 +98,35 @@ mod tests {
 
     static HTTP_ENABLED: OnceLock<bool> = OnceLock::new();
 
+    use minreq::get;
+
     use crate::prelude::*;
 
     fn setup_http_server() -> Result<(), Box<dyn std::error::Error>> {
+        simple_logger::SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .env()
+            .init()
+            .unwrap();
+
         #[get("/ping")]
         fn ping() -> &'static str {
             "pong\n"
         }
 
+        #[get("/check_headers")]
+        fn check_headers(req: Request) -> String {
+            let headers = req.get_headers();
+            let test_header = headers.get("test");
+            if let Some(header) = test_header {
+                format!("test: {header}")
+            } else {
+                String::from("No header")
+            }
+        }
+
         let sock = std::net::TcpListener::bind("127.0.0.1:23195")?;
-        let routes = Routes::new(vec![ping()]);
+        let routes = Routes::new(vec![ping(), check_headers()]);
         let config = Config::new().routes(routes);
         std::thread::spawn(move || {
             HttpListener::new(sock, config).start();
@@ -175,13 +194,29 @@ mod tests {
     }
     #[test]
     fn respond_to_minimal_request() -> Result<(), Box<dyn std::error::Error>> {
-        setup_http_server()?;
-        while HTTP_ENABLED.get().is_none() {}
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
 
         thread::sleep(Duration::from_secs(1));
         let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
         let parsed_resp = request.as_str()?;
         assert_eq!(parsed_resp, "pong\n");
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_headers() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(500));
+        let req = minreq::get("http://127.0.0.1:23195/check_headers")
+            .with_header("test", "yes")
+            .send()?;
+
+        assert_eq!(req.as_str()?, "test: yes");
 
         Ok(())
     }
