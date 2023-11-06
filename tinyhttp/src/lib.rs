@@ -131,7 +131,9 @@ mod tests {
 
         #[post("/check_post")]
         fn check_post(req: Request) -> String {
+            let body_bytes = req.get_raw_body();
             let body = req.get_parsed_body().unwrap();
+            assert_eq!(std::str::from_utf8(body_bytes).unwrap(), body);
             format!("hello, {body}")
         }
 
