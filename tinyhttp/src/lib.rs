@@ -110,7 +110,8 @@ mod tests {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Info)
             .env()
-            .init();
+            .init()
+            .unwrap();
 
         #[get("/ping")]
         fn ping() -> &'static str {
@@ -224,7 +225,7 @@ mod tests {
             setup_http_server()?;
         }
 
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_millis(100));
         let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
         let parsed_resp = request.as_str()?;
         assert_eq!(parsed_resp, "pong\n");
@@ -237,7 +238,7 @@ mod tests {
         if HTTP_ENABLED.get().is_none() {
             setup_http_server()?;
         }
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(100));
         let req = minreq::get("http://127.0.0.1:23195/check_headers")
             .with_header("test", "yes")
             .send()?;

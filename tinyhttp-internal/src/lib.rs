@@ -14,7 +14,6 @@ pub mod async_http;
 
 #[cfg(test)]
 mod tests {
-    use crate::request::Request;
 
     #[test]
     fn build_request() {
@@ -47,5 +46,4 @@ mod tests {
             String::from("1 2 3 test test...")
         );
     }
-
 }

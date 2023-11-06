@@ -20,9 +20,6 @@ pub enum BodyType {
     Bytes(Vec<u8>),
 }
 
-unsafe impl Sync for Request {}
-unsafe impl Send for Request {}
-
 impl Request {
     pub fn new(
         raw_body: &[u8],
