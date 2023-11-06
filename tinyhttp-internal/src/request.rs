@@ -9,7 +9,7 @@ use std::collections::HashMap;
 pub struct Request {
     raw_headers: Vec<String>,
     status_line: Vec<String>,
-    body: Vec<u8>,
+    body: Box<[u8]>,
     wildcard: Option<String>,
     is_http2: bool,
 }
@@ -31,7 +31,7 @@ impl Request {
         wildcard: Option<String>,
     ) -> Request {
         Request {
-            body: raw_body.to_vec(),
+            body: Box::from(raw_body),
             raw_headers,
             status_line,
             wildcard,

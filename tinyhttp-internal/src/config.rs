@@ -1,13 +1,15 @@
-use std::{collections::HashMap, sync::{Arc, OnceLock}};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 
-use crate::{request::Request};
+use crate::request::Request;
 pub use dyn_clone::DynClone;
 use std::fmt::Debug;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
-
-
 
 use crate::response::Response;
 
@@ -20,7 +22,7 @@ use std::net::{Incoming, TcpListener};
 use crate::http::start_http;
 
 #[cfg(feature = "async")]
-use tokio::{net::TcpListener};
+use tokio::net::TcpListener;
 
 #[cfg(feature = "async")]
 use crate::async_http::start_http;
@@ -32,9 +34,11 @@ use std::any::Any;
 
 type RouteVec = Vec<Box<dyn Route>>;
 
-pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> = OnceLock::new();
+pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
+    OnceLock::new();
 
-pub static POST_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> = OnceLock::new();
+pub static POST_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
+    OnceLock::new();
 
 #[derive(Clone, Copy, Debug)]
 pub enum Method {
@@ -105,7 +109,6 @@ impl HttpListener {
     pub fn threads(mut self, threads: usize) -> Self {
         let pool = Builder::new().core_size(threads).build();
 
-
         self.pool = pool;
         self
     }
@@ -129,7 +132,6 @@ impl HttpListener {
     pub fn get_stream(&self) -> Incoming<'_> {
         self.socket.incoming()
     }
-
 }
 
 #[derive(Clone)]
@@ -163,7 +165,7 @@ pub struct Config {
     spa: bool,
     http2: bool,
     response_middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
-    request_middleware: Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>>
+    request_middleware: Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>>,
 }
 
 impl Default for Config {
@@ -213,7 +215,7 @@ impl Config {
             spa: false,
             http2: false,
             request_middleware: None,
-            response_middleware: None
+            response_middleware: None,
         }
     }
 
@@ -353,12 +355,18 @@ impl Config {
         self
     }
 
-    pub fn request_middleware<F: FnMut(&mut Request) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
+    pub fn request_middleware<F: FnMut(&mut Request) + Send + Sync + 'static>(
+        mut self,
+        middleware_fn: F,
+    ) -> Self {
         self.request_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
         self
     }
 
-    pub fn response_middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(mut self, middleware_fn: F) -> Self {
+    pub fn response_middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(
+        mut self,
+        middleware_fn: F,
+    ) -> Self {
         self.response_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
         self
     }
@@ -378,51 +386,60 @@ impl Config {
     pub fn get_mount(&self) -> Option<&String> {
         self.mount_point.as_ref()
     }
-    pub fn get_routes(&self, path: &str) -> Option<Box<dyn Route>> {
-        let path = if path.ends_with('/') && path.matches('/').count() > 1 {
-            let mut chars = path.chars();
+    pub fn get_routes(&self, req_path: &str) -> Option<&dyn Route> {
+        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
+            let mut chars = req_path.chars();
             chars.next_back();
             chars.as_str()
         } else {
-            path
+            req_path
         };
 
         #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &path);
-        
-        let route = self.get_routes.as_ref()?.get(path);
+        log::trace!("get_routes -> new_path: {}", &req_path);
 
-        if let Some(route) = route {
-            return Some(route.clone());
+        let routes = self.get_routes.as_ref()?;
+
+        if let Some(route) = routes.get(req_path) {
+            return Some(route.deref());
         }
 
-        if let Some(wildcard_route) = self.get_routes.as_ref()?.iter().find(|p| path.starts_with(p.0) && p.1.wildcard().is_some()) {
-            return Some(wildcard_route.1.clone())
+        if let Some((_, wildcard_route)) = routes
+            .iter()
+            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
+        {
+            return Some(wildcard_route.deref());
         }
 
         None
     }
 
-    pub fn post_routes(&self, path: &str) -> Option<Box<dyn Route>> {
+    pub fn post_routes(&self, req_path: &str) -> Option<&dyn Route> {
         #[cfg(feature = "log")]
-        log::trace!("post_routes -> path: {}", path);
+        log::trace!("post_routes -> path: {}", req_path);
 
-        let path = if path.ends_with('/') && path.matches('/').count() > 1 {
-            let mut chars = path.chars();
+        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
+            let mut chars = req_path.chars();
             chars.next_back();
             chars.as_str()
         } else {
-            path
+            req_path
         };
 
-        let route = self.post_routes.as_ref()?.get(path);
+        #[cfg(feature = "log")]
+        log::trace!("get_routes -> new_path: {}", &req_path);
 
-        if let Some(route) = route {
-            return Some(route.clone());
+        let routes = self.post_routes.as_ref()?;
+
+        if let Some(route) = routes.get(req_path) {
+            return Some(route.deref());
         }
 
-        if let Some(wildcard_route) = self.get_routes.as_ref()?.iter().find(|p| path.starts_with(p.0)) {
-            return Some(wildcard_route.1.clone())
+        if let Some((_, wildcard_route)) = routes
+            .iter()
+            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
+        {
+            return Some(wildcard_route.deref());
         }
 
         None
@@ -433,7 +450,9 @@ impl Config {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn get_request_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
+    pub(crate) fn get_request_middleware(
+        &self,
+    ) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
         if let Some(s) = &self.request_middleware {
             Some(Arc::clone(s))
         } else {
@@ -442,7 +461,9 @@ impl Config {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn get_response_middleware(&self) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
+    pub(crate) fn get_response_middleware(
+        &self,
+    ) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
         if let Some(s) = &self.response_middleware {
             Some(Arc::clone(s))
         } else {

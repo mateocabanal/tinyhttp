@@ -65,7 +65,7 @@ impl Response {
         let mut header_bytes: Vec<u8> = self
             .headers
             .iter()
-            .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()].concat())
+            .flat_map(|(i, j)| [i.as_bytes(), j.as_bytes()].concat())
             .collect();
 
         header_bytes.extend(b"\r\n");
