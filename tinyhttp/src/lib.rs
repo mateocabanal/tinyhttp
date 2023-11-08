@@ -149,12 +149,19 @@ mod tests {
             format!("got: {wildcard}")
         }
 
+        #[post("/post_hello")]
+        fn post_hello(req: Request) -> String {
+            let body = req.get_parsed_body().unwrap();
+            format!("Hello, {body}")
+        }
+
         let routes = Routes::new(vec![
             ping(),
             check_headers(),
             check_post(),
             get_wildcard(),
             post_wildcard(),
+            post_hello(),
         ]);
         let config = Config::new().routes(routes);
         std::thread::spawn(move || {
@@ -276,6 +283,19 @@ mod tests {
         let post_req = minreq::post("http://127.0.0.1:23195/post_wildcard/tinyhttp").send()?;
         assert_eq!(post_req.as_str()?, "got: tinyhttp");
 
+        Ok(())
+    }
+
+    #[test]
+    fn check_post_hello() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(100));
+        let req = minreq::post("http://127.0.0.1:23195/post_hello")
+            .with_body("mateo")
+            .send()?;
+        assert_eq!(req.as_str()?, "Hello, mateo");
         Ok(())
     }
 }

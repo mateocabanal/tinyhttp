@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for mateo-tinyhttp on 2023-11-06T13:04:12-08:00
+# fly.toml app configuration file generated for mateo-tinyhttp on 2023-11-06T13:26:44-08:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -10,6 +10,8 @@ kill_timeout = "5s"
 
 [experimental]
   cmd = ["./heroku-deploy"]
+
+[build]
 
 [env]
   PORT = "8080"
@@ -35,4 +37,3 @@ kill_timeout = "5s"
     interval = "15s"
     timeout = "2s"
     grace_period = "1s"
-    restart_limit = 6

@@ -47,9 +47,9 @@ impl Request {
     }
 
     /// Get request body as a string
-    pub fn get_parsed_body(&self) -> Option<String> {
+    pub fn get_parsed_body(&self) -> Option<&str> {
         if let Ok(s) = std::str::from_utf8(&self.body) {
-            Some(s.to_string())
+            Some(s)
         } else {
             None
         }
@@ -82,6 +82,24 @@ impl Request {
     pub fn set_http2(mut self, w: bool) -> Self {
         self.is_http2 = w;
         self
+    }
+}
+
+impl TryFrom<Request> for Vec<u8> {
+    type Error = Box<dyn std::error::Error>;
+    fn try_from(value: Request) -> Result<Self, Self::Error> {
+        Ok(value.get_raw_body().to_vec())
+    }
+}
+
+impl TryFrom<Request> for String {
+    type Error = Box<dyn std::error::Error>;
+    fn try_from(value: Request) -> Result<Self, Self::Error> {
+        if let Some(s) = value.get_parsed_body() {
+            Ok(s.to_string())
+        } else {
+            Err("failed to parse body into a string".into())
+        }
     }
 }
 

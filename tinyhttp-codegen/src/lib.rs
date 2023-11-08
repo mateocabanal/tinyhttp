@@ -1,27 +1,25 @@
-use std::{ops::Deref};
+use std::ops::Deref;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::parse_macro_input;
+use syn::spanned::Spanned;
 
 #[proc_macro_attribute]
 pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_fn: syn::ItemFn = syn::parse(item).unwrap();
-    //eprintln!("{:#?}\n{:#?}", attr, item);
-    let args = parse_macro_input!(attr as syn::AttributeArgs);
+    let value: syn::LitStr = syn::parse(attr).unwrap();
 
     let sig = item_fn.sig;
     let name = sig.ident.clone();
     let body = item_fn.block.deref();
-    let path_token = args[0].clone();
     let return_type = sig.output;
 
     let body_args = sig.inputs;
     let is_body_args = !body_args.is_empty();
     //eprintln!("LEN: {}", body_args.len());
 
-    let mut path;
-    match path_token {
+    let mut path = value.value();
+    /*match path_token {
         syn::NestedMeta::Meta(_) => panic!("IN TOKEN MATCH!"),
         syn::NestedMeta::Lit(e) => match e {
             syn::Lit::Str(e) => {
@@ -35,7 +33,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::Lit::Bool(_) => panic!("IN TOKEN MATCH!"),
             syn::Lit::Verbatim(_) => panic!("IN TOKEN MATCH!"),
         },
-    };
+    };*/
 
     let new_wildcard = if path.contains("/:") {
         let path_clone = path.clone();
@@ -50,22 +48,32 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    #[allow(unused_assignments)]
-    let mut return_type_str = String::new();
-
-    match return_type {
-        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
-        syn::ReturnType::Type(_, value) => match *value {
-            syn::Type::Path(stream) => {
-                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
-            }
-            _ => return_type_str = "NO RETURN TYPE!".to_string(),
-        },
+    let span = return_type.span();
+    let return_error = match return_type {
+        syn::ReturnType::Default => Some(
+            syn::Error::new(span, "You're forgetting to return something...").into_compile_error(),
+        ),
+        _ => None,
     };
 
-    let is_ret_type_res = return_type_str == "Response";
+    if let Some(e) = return_error {
+        return e.into();
+    }
 
-    let new_get_body = if is_ret_type_res {
+    // let is_ret_type_res = return_type_str == "Response";
+
+    //    let new_get_body = if is_ret_type_res {
+    //        quote! {
+    //            let mut get_route = GetRouteWithReqAndRes::new()
+    //                .set_path(#path.into());
+    //
+    //            fn body(#body_args) -> Response {
+    //                #body.into()
+    //            }
+    //
+    //            get_route = get_route.set_body(body);
+    //        }
+    let new_get_body = if is_body_args {
         quote! {
             let mut get_route = GetRouteWithReqAndRes::new()
                 .set_path(#path.into());
@@ -76,23 +84,12 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             get_route = get_route.set_body(body);
         }
-    } else if is_body_args {
-        quote! {
-            let mut get_route = GetRouteWithReq::new()
-                .set_path(#path.into());
-
-            fn body(#body_args) -> Vec<u8> {
-                #body.into()
-            }
-
-            get_route = get_route.set_body(body);
-        }
     } else {
         quote! {
             let mut get_route = BasicGetRoute::new()
                 .set_path(#path.into());
 
-            fn body() -> Vec<u8> {
+            fn body() -> Response {
                 #body.into()
             }
 
@@ -121,33 +118,17 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
     //eprintln!("{:#?}\n{:#?}", attr, item);
-    let args = parse_macro_input!(attr as syn::AttributeArgs);
     let item: syn::ItemFn = syn::parse(item).unwrap();
+    let value: syn::LitStr = syn::parse(attr).unwrap();
 
     let fn_args = item.sig.inputs;
     let name = item.sig.ident.clone();
     let body = item.block.deref();
     let return_type = item.sig.output;
 
-    let path_token = args[0].clone();
     let is_body_args = !fn_args.is_empty();
 
-    let mut path;
-    match path_token {
-        syn::NestedMeta::Meta(_) => panic!("IN MATCH RETURN TYPE!"),
-        syn::NestedMeta::Lit(e) => match e {
-            syn::Lit::Str(e) => {
-                path = e.value();
-            }
-            syn::Lit::ByteStr(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Byte(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Char(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Int(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Float(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Bool(_) => panic!("IN MATCH RETURN TYPE!"),
-            syn::Lit::Verbatim(_) => panic!("IN MATCH RETURN TYPE!"),
-        },
-    };
+    let mut path = value.value();
     let new_wildcard = if path.contains("/:") {
         let path_clone = path.clone();
         let mut iter = path_clone.split(':');
@@ -161,38 +142,45 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    #[allow(unused_assignments)]
-    let mut return_type_str = String::new();
-
-    match return_type {
-        syn::ReturnType::Default => return_type_str = "NO RETURN TYPE!".to_string(),
-        syn::ReturnType::Type(_, value) => match *value {
-            syn::Type::Path(stream) => {
-                return_type_str = stream.path.segments.last().unwrap().ident.to_string()
-            }
-            _ => return_type_str = "NO RETURN TYPE!".to_string(),
-        },
+    let return_error = match return_type {
+        syn::ReturnType::Default => Some(
+            syn::Error::new(
+                return_type.span(),
+                "You're forgetting to return something...",
+            )
+            .into_compile_error(),
+        ),
+        _ => None,
     };
 
-    let is_ret_type_res = return_type_str == "Response";
+    if let Some(e) = return_error {
+        return e.into();
+    }
 
-    let new_post_body = if is_ret_type_res {
+    let new_post_body = if is_body_args {
+        let first_arg_name = fn_args.first().unwrap();
+        let arg_type = match first_arg_name {
+            syn::FnArg::Typed(i) => i.to_owned(),
+            _ => todo!(),
+        };
+        // NOTE: Gets arg name and type
+        //        let arg_name_pat = match &arg_type.pat.deref() {
+        //            syn::Pat::Ident(i) => i.to_owned(),
+        //            _ => todo!(),
+        //        };
+        //        let arg_name_type = match &arg_type.ty.deref() {
+        //            syn::Type::Path(i) => i.to_owned(),
+        //            _ => todo!(),
+        //        };
+        //
+        //        let arg_name_type = &arg_name_type.path.segments.first().unwrap().ident;
         quote! {
+            use std::convert::{TryInto, TryFrom};
             let mut post_route = PostRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body(#fn_args) -> Response {
-                #body.into()
-            }
-
-            post_route = post_route.set_body(body);
-        }
-    } else if is_body_args {
-        quote! {
-            let mut post_route = PostRouteWithReq::new()
-                .set_path(#path.into());
-
-            fn body(#fn_args) -> Vec<u8> {
+            fn body(try_from_req: Request) -> Response {
+                let #arg_type = try_from_req.try_into().unwrap();
                 #body.into()
             }
 
@@ -203,7 +191,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             let mut post_route = BasicPostRoute::new()
                 .set_path(#path.into());
 
-            fn body() -> Vec<u8> {
+            fn body() -> Response {
                 #body.into()
             }
 

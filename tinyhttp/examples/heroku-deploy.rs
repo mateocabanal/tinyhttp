@@ -43,7 +43,7 @@ fn update_html() -> &'static str {
 
 #[get("/version")]
 fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION_PRE")
+    env!("CARGO_PKG_VERSION")
 }
 
 fn init_html() {

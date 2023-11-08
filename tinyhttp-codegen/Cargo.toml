@@ -14,6 +14,6 @@ repository = "https://github.com/mateocabanal/tinyhttp-codegen"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.98", features = ["full"] }
+syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1.0.18"
 tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0-rc3", default-features = false }
