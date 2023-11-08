@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem};
 
 /// Struct containing data on a single request.
 ///
 /// parsed_body which is a Option<String> that can contain the body as a String
 ///
 /// body is used when the body of the request is not a String
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Request {
     raw_headers: Vec<String>,
     status_line: Vec<String>,
@@ -82,6 +82,24 @@ impl Request {
     pub fn set_http2(mut self, w: bool) -> Self {
         self.is_http2 = w;
         self
+    }
+}
+
+impl<'a> From<&'a mut Request> for &'a [u8] {
+    fn from(value: &'a mut Request) -> Self {
+        value.get_raw_body()
+    }
+}
+
+impl<'a> From<&'a mut Request> for Option<&'a str> {
+    fn from(value: &'a mut Request) -> Self {
+        value.get_parsed_body()
+    }
+}
+
+impl From<&mut Request> for Request {
+    fn from(value: &mut Request) -> Self {
+        mem::take(value)
     }
 }
 

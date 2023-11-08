@@ -179,8 +179,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
             let mut post_route = PostRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body(try_from_req: Request) -> Response {
-                let #arg_type = try_from_req.try_into().unwrap();
+            fn body<'a>(try_from_req: &'a mut Request) -> Response {
+                let #arg_type = try_from_req.into();
                 #body.into()
             }
 

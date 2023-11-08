@@ -150,8 +150,10 @@ mod tests {
         }
 
         #[post("/post_hello")]
-        fn post_hello(req: Request) -> String {
-            let body = req.get_parsed_body().unwrap();
+        fn post_hello(body: Option<&str>) -> String {
+            // As this is a controlled test, we know the
+            // body is a valid UTF-8 string
+            let body = body.unwrap();
             format!("Hello, {body}")
         }
 

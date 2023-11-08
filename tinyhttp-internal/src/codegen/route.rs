@@ -403,7 +403,7 @@ pub struct PostRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
-    post_body: Option<fn(Request) -> Response>,
+    post_body: Option<fn(&mut Request) -> Response>,
 }
 impl Default for PostRouteWithReqAndRes {
     fn default() -> Self {
@@ -433,14 +433,14 @@ impl PostRouteWithReqAndRes {
         self
     }
 
-    pub fn set_body(mut self, body: fn(Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&mut Request) -> Response) -> Self {
         self.post_body = Some(body);
         self
     }
 }
 impl ToResponse for PostRouteWithReqAndRes {
-    fn to_res(&self, req: Request) -> Response {
-        self.post_body.unwrap()(req)
+    fn to_res(&self, mut req: Request) -> Response {
+        self.post_body.unwrap()(&mut req)
     }
 }
 

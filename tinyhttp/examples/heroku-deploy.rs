@@ -9,8 +9,12 @@ fn api_get() -> &'static str {
 }
 
 #[post("/")]
-fn post(body: Request) -> String {
-    format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
+fn post(msg: Option<&str>) -> String {
+    if let Some(msg) = msg {
+        format!("Hello, {msg}\n")
+    } else {
+        String::from("Body received is not a valid string!\n")
+    }
 }
 
 #[post("/w")]
