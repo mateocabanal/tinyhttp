@@ -45,7 +45,7 @@ impl Response {
             headers: HashMap::new(),
             status_line: String::new(),
             body: None,
-            mime: None,
+            mime: Some(String::from("HTTP/1.1 200 OK")),
             http2: false,
         }
     }

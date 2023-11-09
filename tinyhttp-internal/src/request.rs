@@ -1,5 +1,16 @@
 use std::{collections::HashMap, mem};
 
+#[derive(Clone, Debug, Default)]
+pub struct Wildcard<T> {
+    wildcard: T,
+}
+
+impl<T> Wildcard<T> {
+    pub fn get_wildcard(&self) -> &T {
+        &self.wildcard
+    }
+}
+
 /// Struct containing data on a single request.
 ///
 /// parsed_body which is a Option<String> that can contain the body as a String
@@ -85,6 +96,22 @@ impl Request {
     }
 }
 
+impl<'a> From<&'a mut Request> for Wildcard<&'a str> {
+    fn from(value: &'a mut Request) -> Self {
+        Wildcard {
+            wildcard: value.wildcard.as_ref().unwrap(),
+        }
+    }
+}
+
+impl<'a> From<&'a mut Request> for Wildcard<&'a [u8]> {
+    fn from(value: &'a mut Request) -> Self {
+        Wildcard {
+            wildcard: value.wildcard.as_ref().unwrap().as_bytes(),
+        }
+    }
+}
+
 impl<'a> From<&'a mut Request> for &'a [u8] {
     fn from(value: &'a mut Request) -> Self {
         value.get_raw_body()
@@ -100,24 +127,6 @@ impl<'a> From<&'a mut Request> for Option<&'a str> {
 impl From<&mut Request> for Request {
     fn from(value: &mut Request) -> Self {
         mem::take(value)
-    }
-}
-
-impl TryFrom<Request> for Vec<u8> {
-    type Error = Box<dyn std::error::Error>;
-    fn try_from(value: Request) -> Result<Self, Self::Error> {
-        Ok(value.get_raw_body().to_vec())
-    }
-}
-
-impl TryFrom<Request> for String {
-    type Error = Box<dyn std::error::Error>;
-    fn try_from(value: Request) -> Result<Self, Self::Error> {
-        if let Some(s) = value.get_parsed_body() {
-            Ok(s.to_string())
-        } else {
-            Err("failed to parse body into a string".into())
-        }
     }
 }
 

@@ -8,8 +8,15 @@ fn get() -> &'static str {
 }
 
 #[post("/")]
-fn post(body: Request) -> String {
-    format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
+fn post(body: Option<&str>) -> String {
+    let body = body.unwrap();
+    format!("Hello, {body}\n")
+}
+
+#[post("/a")]
+fn demo_post(req: Request) -> String {
+    let body = req.get_parsed_body().unwrap();
+    format!("Hello, {body}")
 }
 
 #[post("/w")]
@@ -47,11 +54,11 @@ fn get_return_res(res: Request) -> Response {
 }
 
 fn main() {
-    simple_logger::SimpleLogger::new().with_level(log::LevelFilter::Info).env().init().unwrap();
-
-    let middleware = |res: &mut Response| {
-        res.headers.insert("X-MIDDLEWARE: ".to_string(), "SOMETHING\r\n".to_string());
-    };
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .env()
+        .init()
+        .unwrap();
 
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![
@@ -62,7 +69,7 @@ fn main() {
         post_wildcard(),
         post_return_vec(),
     ]);
-    let config = Config::new().routes(routes).gzip(true).response_middleware(middleware);
+    let config = Config::new().routes(routes).gzip(false);
     let http = HttpListener::new(socket, config);
 
     http.start();

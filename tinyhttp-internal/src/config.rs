@@ -181,8 +181,7 @@ impl Config {
     ///
     /// ### Example:
     /// ```ignore
-    /// use tinyhttp::internal::config::*;
-    /// use tinyhttp::codegen::*;
+    /// use tinyhttp::prelude::*;
     ///
     /// #[get("/test")]
     /// fn get_test() -> String {

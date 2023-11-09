@@ -89,6 +89,7 @@ pub mod prelude {
     pub use tinyhttp_internal::codegen::route::*;
     pub use tinyhttp_internal::config::*;
     pub use tinyhttp_internal::request::Request;
+    pub use tinyhttp_internal::request::Wildcard;
     pub use tinyhttp_internal::response::Response;
 }
 
@@ -144,8 +145,8 @@ mod tests {
         }
 
         #[post("/post_wildcard/:")]
-        fn post_wildcard(req: Request) -> String {
-            let wildcard = req.get_wildcard().unwrap();
+        fn post_wildcard(wc: Wildcard<&str>) -> String {
+            let wildcard = wc.get_wildcard();
             format!("got: {wildcard}")
         }
 
