@@ -47,7 +47,7 @@ pub(crate) fn start_http(http: HttpListener) {
             #[cfg(feature = "log")]
             log::trace!("parse_request() called");
 
-            parse_request(&mut conn, &config);
+            parse_request(&mut conn, config);
         }
 
         //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
