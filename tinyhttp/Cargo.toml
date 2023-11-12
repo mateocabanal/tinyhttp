@@ -26,7 +26,7 @@ name = "async"
 required-features = ["async"]
 
 [dependencies]
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0-rc3", default-features = false }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0-rc3", default-features = false, features = ["sys"] }
 tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.4.0-rc3" }
 
 [features]

@@ -20,7 +20,7 @@ impl<T> Wildcard<T> {
 pub struct Request {
     raw_headers: Vec<String>,
     status_line: Vec<String>,
-    body: Box<[u8]>,
+    body: Vec<u8>,
     wildcard: Option<String>,
     is_http2: bool,
 }
@@ -39,7 +39,7 @@ impl Request {
         wildcard: Option<String>,
     ) -> Request {
         Request {
-            body: Box::from(raw_body),
+            body: raw_body.to_vec(),
             raw_headers,
             status_line,
             wildcard,
@@ -78,8 +78,8 @@ impl Request {
     }
 
     /// Get status line of request
-    pub fn get_status_line(&self) -> &Vec<String> {
-        &self.status_line
+    pub fn get_status_line<'a>(&'a self) -> &'a [String] {
+        &*self.status_line
     }
 
     pub fn get_wildcard(&self) -> Option<&String> {
@@ -129,7 +129,6 @@ impl From<&mut Request> for Request {
         mem::take(value)
     }
 }
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]

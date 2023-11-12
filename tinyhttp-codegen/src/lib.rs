@@ -175,11 +175,10 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         //
         //        let arg_name_type = &arg_name_type.path.segments.first().unwrap().ident;
         quote! {
-            use std::convert::{TryInto, TryFrom};
             let mut post_route = PostRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body<'a>(try_from_req: &'a mut Request) -> Response {
+            fn body<'b>(try_from_req: &'b mut Request) -> Response {
                 let #arg_type = try_from_req.into();
                 #body.into()
             }

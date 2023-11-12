@@ -398,13 +398,17 @@ impl Route for PostRouteWithReq {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PostRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
     post_body: Option<fn(&mut Request) -> Response>,
 }
+
+unsafe impl Sync for PostRouteWithReqAndRes {}
+unsafe impl Send for PostRouteWithReqAndRes {}
+
 impl Default for PostRouteWithReqAndRes {
     fn default() -> Self {
         PostRouteWithReqAndRes {
@@ -433,7 +437,7 @@ impl PostRouteWithReqAndRes {
         self
     }
 
-    pub fn set_body(mut self, body: fn(&mut Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&'_ mut Request) -> Response) -> Self {
         self.post_body = Some(body);
         self
     }
