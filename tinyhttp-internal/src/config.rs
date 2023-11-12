@@ -46,11 +46,11 @@ pub enum Method {
     POST,
 }
 
-pub trait ToResponse: DynClone + Sync + Send + Debug {
+pub trait ToResponse: DynClone + Sync + Send {
     fn to_res(&self, res: Request) -> Response;
 }
 
-pub trait Route: DynClone + Sync + Send + Debug + ToResponse {
+pub trait Route: DynClone + Sync + Send + ToResponse {
     fn get_path(&self) -> &str;
     fn get_method(&self) -> Method;
     fn wildcard(&self) -> Option<String>;
@@ -120,7 +120,8 @@ impl HttpListener {
 
     #[cfg(not(feature = "async"))]
     pub fn start(self) {
-        start_http(self);
+        let conf_clone = self.config.clone();
+        start_http(self, conf_clone);
     }
 
     #[cfg(feature = "async")]

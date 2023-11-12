@@ -2,6 +2,7 @@ use std::{
     io::{self, BufReader},
     iter::FromIterator,
     path::Path,
+    sync::Arc,
 };
 
 use std::{fs::File, io::Read, io::Write};
@@ -15,11 +16,12 @@ use crate::{
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
 
-pub(crate) fn start_http(http: HttpListener) {
-    let config = http.config.clone();
+pub(crate) fn start_http(http: HttpListener, config: Config) {
+    let arc_config = Arc::new(config);
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
 
+        let config = arc_config.clone();
         if http.config.ssl && cfg!(feature = "ssl") {
             #[cfg(feature = "ssl")]
             let acpt = http.ssl_acpt.clone().unwrap();
@@ -97,7 +99,9 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     );
 
     let mut headers = Vec::<String>::new();
-    let mut headers_index = vec![first_header_index + 2];
+    let mut headers_index = first_header_index + 2;
+
+    // Sort through all request headers
     while let Some(header_index) = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
         .map(|(i, _)| i + 2)
@@ -105,7 +109,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
-        let header = std::str::from_utf8(&buf[*headers_index.last().unwrap()..header_index - 2])
+        let header = std::str::from_utf8(&buf[headers_index..header_index - 2])
             .unwrap()
             .to_lowercase();
         if header.is_empty() {
@@ -114,7 +118,7 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
         #[cfg(feature = "log")]
         log::trace!("HEADER: {:?}", headers);
 
-        headers_index.push(header_index);
+        headers_index = header_index;
         headers.push(header);
     }
 
@@ -122,9 +126,9 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
 
     //let headers = parse_headers(http.to_string());
     let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
-    let status_line: Vec<String> = str_status_line.iter().map(|i| i.to_string()).collect();
+    let status_line: Vec<String> = str_status_line.into_iter().map(|i| i.to_string()).collect();
     #[cfg(feature = "log")]
-    log::trace!("{:#?}", str_status_line);
+    log::trace!("{:#?}", status_line);
     let body_index = buf
         .windows(4)
         .enumerate()
@@ -255,12 +259,12 @@ fn build_res(mut req: Request, config: &Config) -> Response {
 
         _ => Response::new()
             .status_line("HTTP/1.1 404 NOT FOUND\r\n")
-            .body(b"<h1>404 Not Found</h1>".to_vec())
+            .body(b"<h1>Unkown Error Occurred</h1>".to_vec())
             .mime("text/html"),
     }
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
+fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     let buf = read_stream(conn);
     let request = build_and_parse_req(buf);
 
