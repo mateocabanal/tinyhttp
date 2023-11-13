@@ -5,18 +5,21 @@ pub mod codegen;
 pub mod config;
 pub mod request;
 pub mod response;
-pub mod thread_pool;
 
+#[cfg(not(feature = "async"))]
 pub mod http;
-pub mod http2;
+
+#[cfg(feature = "async")]
+pub mod async_http;
 
 #[cfg(test)]
 mod tests {
+
     #[test]
     fn build_request() {
         use crate::request::Request;
         let request = Request::new(
-            b"Hello, World!".to_vec(),
+            b"Hello, World!",
             vec!["Content-Type: text/plain".to_string()],
             vec![
                 "GET".to_string(),

@@ -65,7 +65,8 @@
 //! // Example 2: same as example 1, but takes a Request as an argument
 //! #[get("/ex2")]
 //! fn ex2_get(req: Request) -> String {
-//!     let accept_header = req.get_headers().get("accept").unwrap();
+//!     let headers = req.get_headers();
+//!     let accept_header = headers.get("accept").unwrap();
 //!     format!("accept header: {}", accept_header)
 //! }
 //!
@@ -78,6 +79,8 @@
 //!         .body(b"Hello from response!\r\n".to_vec())
 //! }
 
+#![allow(clippy::needless_doctest_main)]
+
 pub use tinyhttp_codegen as codegen;
 pub use tinyhttp_internal as internal;
 
@@ -86,11 +89,92 @@ pub mod prelude {
     pub use tinyhttp_internal::codegen::route::*;
     pub use tinyhttp_internal::config::*;
     pub use tinyhttp_internal::request::Request;
+    pub use tinyhttp_internal::request::Wildcard;
     pub use tinyhttp_internal::response::Response;
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{sync::OnceLock, thread, time::Duration};
+
+    static HTTP_ENABLED: OnceLock<bool> = OnceLock::new();
+
+    use crate::prelude::*;
+
+    fn setup_http_server() -> Result<(), Box<dyn std::error::Error>> {
+        let sock = std::net::TcpListener::bind("127.0.0.1:23195");
+        if sock.is_err() {
+            return Ok(());
+        };
+        let sock = sock?;
+
+        simple_logger::SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .env()
+            .init()
+            .unwrap();
+
+        #[get("/ping")]
+        fn ping() -> &'static str {
+            "pong\n"
+        }
+
+        #[get("/check_headers")]
+        fn check_headers(req: Request) -> String {
+            let headers = req.get_headers();
+            let test_header = headers.get("test");
+            if let Some(header) = test_header {
+                format!("test: {header}")
+            } else {
+                String::from("No header")
+            }
+        }
+
+        #[post("/check_post")]
+        fn check_post(req: Request) -> String {
+            let body_bytes = req.get_raw_body();
+            let body = req.get_parsed_body().unwrap();
+            assert_eq!(std::str::from_utf8(body_bytes).unwrap(), body);
+            format!("hello, {body}")
+        }
+
+        #[get("/get_wildcard/:")]
+        fn get_wildcard(req: Request) -> String {
+            let wildcard = req.get_wildcard().unwrap();
+            format!("got: {wildcard}")
+        }
+
+        #[post("/post_wildcard/:")]
+        fn post_wildcard(wc: Wildcard<&str>) -> String {
+            let wildcard = wc.get_wildcard();
+            format!("got: {wildcard}")
+        }
+
+        #[post("/post_hello")]
+        fn post_hello(body: Option<&str>) -> String {
+            // As this is a controlled test, we know the
+            // body is a valid UTF-8 string
+            let body = body.unwrap();
+            format!("Hello, {body}")
+        }
+
+        let routes = Routes::new(vec![
+            ping(),
+            check_headers(),
+            check_post(),
+            get_wildcard(),
+            post_wildcard(),
+            post_hello(),
+        ]);
+        let config = Config::new().routes(routes);
+        std::thread::spawn(move || {
+            HttpListener::new(sock, config).start();
+        });
+        HTTP_ENABLED.set(true).unwrap();
+
+        Ok(())
+    }
+
     #[test]
     fn test_codegen() {
         use crate::prelude::*;
@@ -110,19 +194,16 @@ mod tests {
         }
 
         let routes = Routes::new(vec![get(), post()]);
-        assert_eq!(
-            false,
-            routes
-                .clone()
-                .get_stream()
-                .clone()
-                .first()
-                .unwrap()
-                .wildcard()
-                .is_some()
-        );
+        assert!(routes
+            .clone()
+            .get_stream()
+            .clone()
+            .first()
+            .unwrap()
+            .wildcard()
+            .is_none());
         let request = Request::new(
-            b"Hello".to_vec(),
+            b"Hello",
             vec!["Accept-Encoding: gzip".to_string()],
             vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
             None,
@@ -142,13 +223,82 @@ mod tests {
         assert_eq!(
             b"Accept-Encoding: gzip".to_vec(),
             routes
-                .clone()
                 .get_stream()
                 .last()
                 .unwrap()
-                .to_res(request.clone())
+                .to_res(request)
                 .body
                 .unwrap()
         );
+    }
+    #[test]
+    fn respond_to_minimal_request() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+
+        thread::sleep(Duration::from_millis(100));
+        let request = minreq::get("http://127.0.0.1:23195/ping").send()?;
+        let parsed_resp = request.as_str()?;
+        assert_eq!(parsed_resp, "pong\n");
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_headers() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(100));
+        let req = minreq::get("http://127.0.0.1:23195/check_headers")
+            .with_header("test", "yes")
+            .send()?;
+
+        assert_eq!(req.as_str()?, "test: yes");
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_post() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(100));
+        let req = minreq::post("http://127.0.0.1:23195/check_post")
+            .with_body("mateo")
+            .send()?;
+
+        assert_eq!(req.as_str()?, "hello, mateo");
+        Ok(())
+    }
+
+    #[test]
+    fn check_wildcards() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(100));
+        let get_req = minreq::get("http://127.0.0.1:23195/get_wildcard/tinyhttp").send()?;
+        assert_eq!(get_req.as_str()?, "got: tinyhttp");
+
+        let post_req = minreq::post("http://127.0.0.1:23195/post_wildcard/tinyhttp").send()?;
+        assert_eq!(post_req.as_str()?, "got: tinyhttp");
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_post_hello() -> Result<(), Box<dyn std::error::Error>> {
+        if HTTP_ENABLED.get().is_none() {
+            setup_http_server()?;
+        }
+        thread::sleep(Duration::from_millis(100));
+        let req = minreq::post("http://127.0.0.1:23195/post_hello")
+            .with_body("mateo")
+            .send()?;
+        assert_eq!(req.as_str()?, "Hello, mateo");
+        Ok(())
     }
 }

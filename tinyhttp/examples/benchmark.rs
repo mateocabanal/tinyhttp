@@ -8,8 +8,15 @@ fn get() -> &'static str {
 }
 
 #[post("/")]
-fn post(body: Request) -> String {
-    format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
+fn post(body: Option<&str>) -> String {
+    let body = body.unwrap();
+    format!("Hello, {body}\n")
+}
+
+#[post("/a")]
+fn demo_post(req: Request) -> String {
+    let body = req.get_parsed_body().unwrap();
+    format!("Hello, {body}")
 }
 
 #[post("/w")]
@@ -38,7 +45,7 @@ fn post_return_vec() -> Vec<u8> {
 fn get_return_res(res: Request) -> Response {
     if res.get_status_line()[1] == "/return_res" {
         Response::new()
-            .status_line("HTTP/1.1 200 OK")
+            .status_line("HTTP/1.1 200 OK\r\n")
             .body(b"Hello, from response!\r\n".to_vec())
             .mime("text/plain")
     } else {
@@ -47,6 +54,12 @@ fn get_return_res(res: Request) -> Response {
 }
 
 fn main() {
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .env()
+        .init()
+        .unwrap();
+
     let socket = TcpListener::bind(":::9001").unwrap();
     let routes = Routes::new(vec![
         get(),
@@ -56,7 +69,7 @@ fn main() {
         post_wildcard(),
         post_return_vec(),
     ]);
-    let config = Config::new().routes(routes).gzip(true);
+    let config = Config::new().routes(routes).gzip(false);
     let http = HttpListener::new(socket, config);
 
     http.start();

@@ -1,33 +1,39 @@
-# fly.toml file generated for mateo-tinyhttp on 2022-09-03T21:46:36-07:00
+# fly.toml app configuration file generated for mateo-tinyhttp on 2023-11-06T13:26:44-08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
 app = "mateo-tinyhttp"
+primary_region = "sea"
 kill_signal = "SIGINT"
-kill_timeout = 5
+kill_timeout = "5s"
+
+[experimental]
+  cmd = ["./heroku-deploy"]
+
+[build]
 
 [env]
   PORT = "8080"
-
-[experimental]
-  cmd = "./heroku-deploy"
+  PRIMARY_REGION = "sea"
 
 [[services]]
-  internal_port = 8080
   protocol = "tcp"
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
   [services.concurrency]
+    type = "connections"
     hard_limit = 25
     soft_limit = 20
 
-  [[services.ports]]
-    handlers = ["http"]
-    port = "80"
-
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = "443"
-
   [[services.tcp_checks]]
-    grace_period = "1s"
     interval = "15s"
-    port = "8080"
-    restart_limit = 6
     timeout = "2s"
+    grace_period = "1s"

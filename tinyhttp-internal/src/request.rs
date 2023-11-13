@@ -1,15 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem};
+
+#[derive(Clone, Debug, Default)]
+pub struct Wildcard<T> {
+    wildcard: T,
+}
+
+impl<T> Wildcard<T> {
+    pub fn get_wildcard(&self) -> &T {
+        &self.wildcard
+    }
+}
 
 /// Struct containing data on a single request.
 ///
 /// parsed_body which is a Option<String> that can contain the body as a String
 ///
 /// body is used when the body of the request is not a String
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Request {
-    parsed_body: Option<String>,
-    headers: HashMap<String, String>,
+    raw_headers: Vec<String>,
     status_line: Vec<String>,
     body: Vec<u8>,
     wildcard: Option<String>,
@@ -24,60 +33,17 @@ pub enum BodyType {
 
 impl Request {
     pub fn new(
-        raw_body: Vec<u8>,
+        raw_body: &[u8],
         raw_headers: Vec<String>,
         status_line: Vec<String>,
         wildcard: Option<String>,
     ) -> Request {
-        let raw_body_clone = raw_body.clone();
-        let ascii_body = match std::str::from_utf8(&raw_body_clone) {
-            Ok(s) => Some(s),
-            Err(_) => {
-                #[cfg(feature = "log")]
-                log::info!("Not an ASCII body");
-                None
-            }
-        };
-
-        let mut headers: HashMap<String, String> = HashMap::new();
-        #[cfg(feature = "log")]
-        log::trace!("Headers: {:#?}", raw_headers);
-        for i in raw_headers.iter() {
-            let mut iter = i.split(": ");
-            let key = iter.next().unwrap();
-            let value = iter.next().unwrap();
-
-            /*            match value {
-                            Some(v) => println!("{}", v),
-                            None => {
-                                break;
-                            }
-                        };
-            */
-            headers.insert(key.to_string(), value.to_string());
-        }
-
-        #[cfg(feature = "log")]
-        log::info!("Request headers: {:?}", headers);
-
-        if let Some(b) = ascii_body {
-            Request {
-                parsed_body: Some(b.to_string()),
-                body: raw_body,
-                headers,
-                status_line,
-                wildcard,
-                is_http2: false,
-            }
-        } else {
-            Request {
-                body: raw_body,
-                parsed_body: None,
-                headers,
-                status_line,
-                wildcard,
-                is_http2: false,
-            }
+        Request {
+            body: raw_body.to_vec(),
+            raw_headers,
+            status_line,
+            wildcard,
+            is_http2: false,
         }
     }
 
@@ -87,23 +53,33 @@ impl Request {
     }
 
     /// Get request body as bytes
-    pub fn get_raw_body(&self) -> &Vec<u8> {
+    pub fn get_raw_body(&self) -> &[u8] {
         &self.body
     }
 
     /// Get request body as a string
-    pub fn get_parsed_body(&self) -> Option<&String> {
-        self.parsed_body.as_ref()
+    pub fn get_parsed_body(&self) -> Option<&str> {
+        if let Ok(s) = std::str::from_utf8(&self.body) {
+            Some(s)
+        } else {
+            None
+        }
     }
 
     /// Get request headers in a HashMap
-    pub fn get_headers(&self) -> &HashMap<String, String> {
-        &self.headers
+    pub fn get_headers(&self) -> HashMap<&str, &str> {
+        #[cfg(feature = "log")]
+        log::trace!("Headers: {:#?}", self.raw_headers);
+        self.raw_headers
+            .iter()
+            .map(|i| i.split(": "))
+            .map(|mut i| (i.next().unwrap(), i.next().unwrap()))
+            .collect::<HashMap<&str, &str>>()
     }
 
     /// Get status line of request
-    pub fn get_status_line(&self) -> &Vec<String> {
-        &self.status_line
+    pub fn get_status_line<'a>(&'a self) -> &'a [String] {
+        &*self.status_line
     }
 
     pub fn get_wildcard(&self) -> Option<&String> {
@@ -118,4 +94,47 @@ impl Request {
         self.is_http2 = w;
         self
     }
+}
+
+impl<'a> From<&'a mut Request> for Wildcard<&'a str> {
+    fn from(value: &'a mut Request) -> Self {
+        Wildcard {
+            wildcard: value.wildcard.as_ref().unwrap(),
+        }
+    }
+}
+
+impl<'a> From<&'a mut Request> for Wildcard<&'a [u8]> {
+    fn from(value: &'a mut Request) -> Self {
+        Wildcard {
+            wildcard: value.wildcard.as_ref().unwrap().as_bytes(),
+        }
+    }
+}
+
+impl<'a> From<&'a mut Request> for &'a [u8] {
+    fn from(value: &'a mut Request) -> Self {
+        value.get_raw_body()
+    }
+}
+
+impl<'a> From<&'a mut Request> for Option<&'a str> {
+    fn from(value: &'a mut Request) -> Self {
+        value.get_parsed_body()
+    }
+}
+
+impl From<&mut Request> for Request {
+    fn from(value: &mut Request) -> Self {
+        mem::take(value)
+    }
+}
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum RequestError {
+    #[error("failed to parse status line")]
+    StatusLineErr,
+    #[error("failed to parse headers")]
+    HeadersErr,
 }

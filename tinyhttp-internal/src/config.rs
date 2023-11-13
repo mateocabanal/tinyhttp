@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 
 use crate::request::Request;
 pub use dyn_clone::DynClone;
@@ -7,18 +11,6 @@ use std::fmt::Debug;
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
-#[cfg(feature = "async")]
-use crate::async_http::start_http;
-
-#[cfg(feature = "async")]
-use async_std::net::{Incoming, TcpListener};
-
-#[cfg(feature = "async")]
-use futures::executor::{ThreadPool, ThreadPoolBuilder};
-
-#[cfg(not(feature = "async"))]
-use crate::http::start_http;
-
 use crate::response::Response;
 
 use rusty_pool::{Builder, ThreadPool};
@@ -26,10 +18,27 @@ use rusty_pool::{Builder, ThreadPool};
 #[cfg(not(feature = "async"))]
 use std::net::{Incoming, TcpListener};
 
+#[cfg(not(feature = "async"))]
+use crate::http::start_http;
+
+#[cfg(feature = "async")]
+use tokio::net::TcpListener;
+
+#[cfg(feature = "async")]
+use crate::async_http::start_http;
+
+use std::sync::Mutex;
+
 #[cfg(test)]
 use std::any::Any;
 
 type RouteVec = Vec<Box<dyn Route>>;
+
+pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
+    OnceLock::new();
+
+pub static POST_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
+    OnceLock::new();
 
 #[derive(Clone, Copy, Debug)]
 pub enum Method {
@@ -37,11 +46,11 @@ pub enum Method {
     POST,
 }
 
-pub trait ToResponse: DynClone + Sync + Send + Debug {
+pub trait ToResponse: DynClone + Sync + Send {
     fn to_res(&self, res: Request) -> Response;
 }
 
-pub trait Route: DynClone + Sync + Send + Debug + ToResponse {
+pub trait Route: DynClone + Sync + Send + ToResponse {
     fn get_path(&self) -> &str;
     fn get_method(&self) -> Method;
     fn wildcard(&self) -> Option<String>;
@@ -58,7 +67,7 @@ impl Clone for Box<dyn Route> {
 }
 
 pub struct HttpListener {
-    socket: TcpListener,
+    pub(crate) socket: TcpListener,
     pub config: Config,
     pub pool: ThreadPool,
     pub use_pool: bool,
@@ -80,13 +89,7 @@ impl HttpListener {
             HttpListener {
                 socket: socket.into(),
                 config,
-                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::default(),
-                #[cfg(feature = "async")]
-                pool: ThreadPoolBuilder::new()
-                    .pool_size(num_cpus::get())
-                    .create()
-                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt,
                 use_pool: true,
@@ -95,13 +98,7 @@ impl HttpListener {
             HttpListener {
                 socket: socket.into(),
                 config,
-                #[cfg(not(feature = "async"))]
                 pool: ThreadPool::default(),
-                #[cfg(feature = "async")]
-                pool: ThreadPoolBuilder::new()
-                    .pool_size(num_cpus::get())
-                    .create()
-                    .unwrap(),
                 #[cfg(feature = "ssl")]
                 ssl_acpt: None,
                 use_pool: true,
@@ -110,14 +107,7 @@ impl HttpListener {
     }
 
     pub fn threads(mut self, threads: usize) -> Self {
-        #[cfg(not(feature = "async"))]
         let pool = Builder::new().core_size(threads).build();
-
-        #[cfg(feature = "async")]
-        let pool = ThreadPoolBuilder::new()
-            .pool_size(threads)
-            .create()
-            .unwrap();
 
         self.pool = pool;
         self
@@ -130,14 +120,16 @@ impl HttpListener {
 
     #[cfg(not(feature = "async"))]
     pub fn start(self) {
-        start_http(self);
+        let conf_clone = self.config.clone();
+        start_http(self, conf_clone);
     }
 
     #[cfg(feature = "async")]
-    pub async fn start_async(self) {
+    pub async fn start(self) {
         start_http(self).await;
     }
 
+    #[cfg(not(feature = "async"))]
     pub fn get_stream(&self) -> Incoming<'_> {
         self.socket.incoming()
     }
@@ -162,8 +154,8 @@ impl Routes {
 #[derive(Clone)]
 pub struct Config {
     mount_point: Option<String>,
-    get_routes: Option<RouteVec>,
-    post_routes: Option<RouteVec>,
+    get_routes: Option<HashMap<String, Box<dyn Route>>>,
+    post_routes: Option<HashMap<String, Box<dyn Route>>>,
     debug: bool,
     pub ssl: bool,
     ssl_chain: Option<String>,
@@ -173,6 +165,8 @@ pub struct Config {
     gzip: bool,
     spa: bool,
     http2: bool,
+    response_middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
+    request_middleware: Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>>,
 }
 
 impl Default for Config {
@@ -188,8 +182,7 @@ impl Config {
     ///
     /// ### Example:
     /// ```ignore
-    /// use tinyhttp::internal::config::*;
-    /// use tinyhttp::codegen::*;
+    /// use tinyhttp::prelude::*;
     ///
     /// #[get("/test")]
     /// fn get_test() -> String {
@@ -206,17 +199,7 @@ impl Config {
         //assert!(routes.len() > 0);
 
         #[cfg(feature = "log")]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Warn)
-            .env();
-
-        #[cfg(all(debug_assertions, feature = "log"))]
-        let logger = simple_logger::SimpleLogger::new()
-            .with_level(log::LevelFilter::Trace)
-            .env();
-
-        #[cfg(feature = "log")]
-        logger.init().unwrap();
+        log::info!("tinyhttp version: {}", env!("CARGO_PKG_VERSION"));
 
         Config {
             mount_point: None,
@@ -231,6 +214,8 @@ impl Config {
             br: false,
             spa: false,
             http2: false,
+            request_middleware: None,
+            response_middleware: None,
         }
     }
 
@@ -275,22 +260,22 @@ impl Config {
     /// ```
 
     pub fn routes(mut self, routes: Routes) -> Self {
-        let mut get_routes: RouteVec = vec![];
-        let mut post_routes: RouteVec = vec![];
+        let mut get_routes = HashMap::new();
+        let mut post_routes = HashMap::new();
         let routes = routes.get_stream();
 
         for route in routes {
-            let clone = dyn_clone::clone_box(&*route);
             match route.get_method() {
                 Method::GET => {
                     #[cfg(feature = "log")]
-                    log::info!("GET Route init!: {}", clone.get_path());
-                    get_routes.push(route);
+                    log::info!("GET Route init!: {}", &route.get_path());
+
+                    get_routes.insert(route.get_path().to_string(), route);
                 }
                 Method::POST => {
                     #[cfg(feature = "log")]
-                    log::info!("POST Route init!: {}", clone.get_path());
-                    post_routes.push(route);
+                    log::info!("POST Route init!: {}", &route.get_path());
+                    post_routes.insert(route.get_path().to_string(), route);
                 }
             }
         }
@@ -370,6 +355,21 @@ impl Config {
         self
     }
 
+    pub fn request_middleware<F: FnMut(&mut Request) + Send + Sync + 'static>(
+        mut self,
+        middleware_fn: F,
+    ) -> Self {
+        self.request_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+        self
+    }
+
+    pub fn response_middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(
+        mut self,
+        middleware_fn: F,
+    ) -> Self {
+        self.response_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+        self
+    }
 
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
@@ -386,75 +386,89 @@ impl Config {
     pub fn get_mount(&self) -> Option<&String> {
         self.mount_point.as_ref()
     }
-    pub fn get_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
-        if path.ends_with('/') && path.matches('/').count() > 1 {
-            path.pop();
+    pub fn get_routes(&self, req_path: &str) -> Option<&dyn Route> {
+        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
+            let mut chars = req_path.chars();
+            chars.next_back();
+            chars.as_str()
+        } else {
+            req_path
         };
 
         #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &path);
+        log::trace!("get_routes -> new_path: {}", &req_path);
 
-        match self.get_routes.clone() {
-            Some(routes) => {
-                for route in routes {
-                    #[cfg(feature = "log")]
-                    log::trace!("get_routes -> paths: {}", route.get_path());
+        let routes = self.get_routes.as_ref()?;
 
-                    if route.get_path() == path {
-                        #[cfg(feature = "log")]
-                        log::trace!("Route found: {:#?}", route);
-
-                        return Some(route);
-                    } else if path.contains(route.get_path()) && route.wildcard().is_some() {
-                        return Some(route);
-                    } else {
-                        continue;
-                    }
-                }
-            }
-            None => return None,
+        if let Some(route) = routes.get(req_path) {
+            return Some(route.deref());
         }
+
+        if let Some((_, wildcard_route)) = routes
+            .iter()
+            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
+        {
+            return Some(wildcard_route.deref());
+        }
+
         None
     }
 
-    pub fn post_routes(&self, path: &mut String) -> Option<Box<dyn Route>> {
+    pub fn post_routes(&self, req_path: &str) -> Option<&dyn Route> {
         #[cfg(feature = "log")]
-        log::trace!("post_routes -> path: {}", path);
-        if path.ends_with('/') && path.matches('/').count() > 1 {
-            path.pop();
+        log::trace!("post_routes -> path: {}", req_path);
+
+        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
+            let mut chars = req_path.chars();
+            chars.next_back();
+            chars.as_str()
+        } else {
+            req_path
         };
+
         #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &path);
+        log::trace!("get_routes -> new_path: {}", &req_path);
 
-        match self.post_routes.clone() {
-            Some(routes) => {
-                for route in routes {
-                    if route.get_path() == path {
-                        /*#[cfg(feature = "log")]
-                        log::trace!(
-                            "POST route found: {:#?}, get_body: {:?}, get_body_with: {:?}",
-                            route,
-                          //  route.post_body().is_some(),
-                          //  route.post_body_with().is_some()
-                        );*/
-                        #[cfg(feature = "log")]
-                        log::trace!("PATH: {}", path);
+        let routes = self.post_routes.as_ref()?;
 
-                        return Some(route);
-                    } else if path.contains(route.get_path()) && route.wildcard().is_some() {
-                        return Some(route);
-                    } else {
-                        continue;
-                    }
-                }
-            }
-            None => return None,
+        if let Some(route) = routes.get(req_path) {
+            return Some(route.deref());
         }
+
+        if let Some((_, wildcard_route)) = routes
+            .iter()
+            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
+        {
+            return Some(wildcard_route.deref());
+        }
+
         None
     }
 
     pub fn get_spa(&self) -> bool {
         self.spa
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_request_middleware(
+        &self,
+    ) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
+        if let Some(s) = &self.request_middleware {
+            Some(Arc::clone(s))
+        } else {
+            None
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_response_middleware(
+        &self,
+    ) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
+        if let Some(s) = &self.response_middleware {
+            Some(Arc::clone(s))
+        } else {
+            None
+        }
     }
 }
 

@@ -11,7 +11,7 @@ pub struct BasicGetRoute {
     method: Method,
     wildcard: Option<String>,
     is_args: Option<bool>,
-    get_body: Option<fn() -> Vec<u8>>,
+    get_body: Option<fn() -> Response>,
     get_body_with: Option<fn(Request) -> Vec<u8>>,
 
     get_body_with_res: Option<fn(Request) -> Response>,
@@ -35,10 +35,7 @@ impl Default for BasicGetRoute {
 
 impl ToResponse for BasicGetRoute {
     fn to_res(&self, _res: Request) -> Response {
-        Response::new()
-            .body(self.get_body.unwrap()())
-            .status_line("HTTP/1.1 200 OK\r\n")
-            .mime("text/plain")
+        self.get_body.unwrap()()
     }
 }
 
@@ -62,7 +59,7 @@ impl BasicGetRoute {
         self.is_args = Some(is_args);
         self
     }
-    pub fn set_body(mut self, body: fn() -> Vec<u8>) -> Self {
+    pub fn set_body(mut self, body: fn() -> Response) -> Self {
         self.get_body = Some(body);
         self
     }
@@ -219,8 +216,8 @@ impl GetRouteWithReqAndRes {
 }
 
 impl ToResponse for GetRouteWithReqAndRes {
-    fn to_res(&self, res: Request) -> Response {
-        self.get_body().unwrap()(res)
+    fn to_res(&self, req: Request) -> Response {
+        self.get_body().unwrap()(req)
     }
 }
 
@@ -249,7 +246,7 @@ pub struct BasicPostRoute {
     method: Method,
     wildcard: Option<String>,
     is_args: Option<bool>,
-    post_body: Option<fn() -> Vec<u8>>,
+    post_body: Option<fn() -> Response>,
     post_body_with: Option<fn(Request) -> Vec<u8>>,
     post_body_with_res: Option<fn(Request) -> Response>,
     is_ret_res: bool,
@@ -290,7 +287,7 @@ impl BasicPostRoute {
         self.is_args = Some(is_args);
         self
     }
-    pub fn set_body(mut self, body: fn() -> Vec<u8>) -> Self {
+    pub fn set_body(mut self, body: fn() -> Response) -> Self {
         self.post_body = Some(body);
         self
     }
@@ -310,10 +307,7 @@ impl BasicPostRoute {
 
 impl ToResponse for BasicPostRoute {
     fn to_res(&self, _req: Request) -> Response {
-        Response::new()
-            .body(self.post_body.unwrap()())
-            .mime("text/plain")
-            .status_line("HTTP/1.1 200 OK")
+        self.post_body.unwrap()()
     }
 }
 
@@ -381,7 +375,7 @@ impl ToResponse for PostRouteWithReq {
         Response::new()
             .body(self.post_body.unwrap()(req))
             .mime("text/plain")
-            .status_line("HTTP/1.1 200 OK")
+            .status_line("HTTP/1.1 200 OK\r\n")
     }
 }
 
@@ -404,13 +398,17 @@ impl Route for PostRouteWithReq {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PostRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
-    post_body: Option<fn(Request) -> Response>,
+    post_body: Option<fn(&mut Request) -> Response>,
 }
+
+unsafe impl Sync for PostRouteWithReqAndRes {}
+unsafe impl Send for PostRouteWithReqAndRes {}
+
 impl Default for PostRouteWithReqAndRes {
     fn default() -> Self {
         PostRouteWithReqAndRes {
@@ -439,14 +437,14 @@ impl PostRouteWithReqAndRes {
         self
     }
 
-    pub fn set_body(mut self, body: fn(Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&'_ mut Request) -> Response) -> Self {
         self.post_body = Some(body);
         self
     }
 }
 impl ToResponse for PostRouteWithReqAndRes {
-    fn to_res(&self, req: Request) -> Response {
-        self.post_body.unwrap()(req)
+    fn to_res(&self, mut req: Request) -> Response {
+        self.post_body.unwrap()(&mut req)
     }
 }
 

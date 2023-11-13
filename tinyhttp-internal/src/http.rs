@@ -1,20 +1,22 @@
 use std::{
-    cell::RefCell,
-    fs::File,
     io::{self, BufReader},
     iter::FromIterator,
     path::Path,
-    rc::Rc,
-    time::Instant,
-    vec,
+    sync::Arc,
 };
 
-#[cfg(not(feature = "async"))]
-use std::io::{Read, Write};
+use std::{fs::File, io::Read, io::Write};
+
+use crate::{
+    config::{Config, HttpListener},
+    request::{Request, RequestError},
+    response::Response,
+};
 
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
 
+<<<<<<< HEAD
 #[cfg(feature = "async")]
 use async_std::io::{Read, Write};
 
@@ -33,16 +35,23 @@ use crate::{
 
 #[cfg(not(feature = "async"))]
 pub(crate) fn start_http(http: HttpListener) {
+=======
+pub(crate) fn start_http(http: HttpListener, config: Config) {
+    let arc_config = Arc::new(config);
+>>>>>>> origin/main
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
-        let config = http.config.clone();
 
-        if config.ssl && cfg!(feature = "ssl") {
+        let config = arc_config.clone();
+        if http.config.ssl && cfg!(feature = "ssl") {
             #[cfg(feature = "ssl")]
             let acpt = http.ssl_acpt.clone().unwrap();
             #[cfg(feature = "ssl")]
             http.pool.execute(move || match acpt.accept(conn) {
                 Ok(mut s) => {
+                    #[cfg(feature = "log")]
+                    log::trace!("parse_request() called");
+
                     parse_request(&mut s, config);
                 }
                 Err(s) => {
@@ -52,9 +61,15 @@ pub(crate) fn start_http(http: HttpListener) {
             });
         } else if http.use_pool {
             http.pool.execute(move || {
+                #[cfg(feature = "log")]
+                log::trace!("parse_request() called");
+
                 parse_request(&mut conn, config);
             });
         } else {
+            #[cfg(feature = "log")]
+            log::trace!("parse_request() called");
+
             parse_request(&mut conn, config);
         }
 
@@ -62,10 +77,11 @@ pub(crate) fn start_http(http: HttpListener) {
     }
 }
 
-fn build_and_parse_req(buf: Vec<u8>) -> Request {
+fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     #[cfg(feature = "log")]
     log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
 
+<<<<<<< HEAD
     #[cfg(feature = "http2")]
     if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") && cfg!(debug_assertions) {
         #[cfg(debug_assertions)]
@@ -79,6 +95,8 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         return Request::new(buf, vec![], vec![], None).set_http2(true);
     }
 
+=======
+>>>>>>> origin/main
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -90,28 +108,37 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         #[cfg(feature = "log")]
         log::error!("failed parsing status line!");
 
+        return Err(RequestError::StatusLineErr);
+    };
+
+    let first_header_index = if let Some(first_header_index) = safe_http_index
+        .find(|(_, w)| matches!(*w, b"\r\n"))
+        .map(|(i, _)| i)
+    {
+        first_header_index
+    } else {
+        #[cfg(feature = "log")]
+        log::warn!("no headers found!");
+
         0usize
     };
 
-    let first_header_index = safe_http_index
-        .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i)
-        .unwrap();
-
     #[cfg(feature = "log")]
-    log::debug!(
+    log::trace!(
         "STATUS LINE: {:#?}",
         std::str::from_utf8(&buf[..status_line_index])
     );
 
     #[cfg(feature = "log")]
-    log::debug!(
+    log::trace!(
         "FIRST HEADER: {:#?}",
         std::str::from_utf8(&buf[status_line_index + 2..first_header_index])
     );
 
     let mut headers = Vec::<String>::new();
-    let mut headers_index = vec![first_header_index + 2];
+    let mut headers_index = first_header_index + 2;
+
+    // Sort through all request headers
     while let Some(header_index) = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
         .map(|(i, _)| i + 2)
@@ -119,28 +146,26 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
-        let header =
-            String::from_utf8(buf[*headers_index.last().unwrap()..header_index - 2].to_vec())
-                .unwrap()
-                .to_lowercase();
+        let header = std::str::from_utf8(&buf[headers_index..header_index - 2])
+            .unwrap()
+            .to_lowercase();
         if header.is_empty() {
             break;
         }
         #[cfg(feature = "log")]
         log::trace!("HEADER: {:?}", headers);
 
-        headers_index.push(header_index);
+        headers_index = header_index;
         headers.push(header);
     }
 
-    let iter_status_line = String::from_utf8(buf[..status_line_index].to_vec()).unwrap();
+    let iter_status_line = std::str::from_utf8(&buf[..status_line_index]).unwrap();
 
     //let headers = parse_headers(http.to_string());
     let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
-    let status_line: Rc<Vec<String>> =
-        Rc::new(str_status_line.iter().map(|i| String::from(*i)).collect());
+    let status_line: Vec<String> = str_status_line.into_iter().map(|i| i.to_string()).collect();
     #[cfg(feature = "log")]
-    log::debug!("{:#?}", status_line);
+    log::trace!("{:#?}", status_line);
     let body_index = buf
         .windows(4)
         .enumerate()
@@ -149,41 +174,33 @@ fn build_and_parse_req(buf: Vec<u8>) -> Request {
         .unwrap();
 
     let raw_body = &buf[body_index + 4..];
-    #[cfg(feature = "log")]
-    log::debug!(
-        "BODY (TOP): {:#?}",
-        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
-    );
-    Request::new(raw_body.to_vec(), headers, status_line.to_vec(), None)
+    //    #[cfg(feature = "log")]
+    //    log::debug!(
+    //        "BODY (TOP): {:#?}",
+    //        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
+    //    );
+    Ok(Request::new(raw_body, headers, status_line, None))
 }
 
-fn build_res(req: &mut Request, config: &Config) -> Response {
-    if req.get_http2() {
-        let mut response = Response::new();
-        response.http2 = true;
-        return response;
-    }
+fn build_res(mut req: Request, config: &Config) -> Response {
     let status_line = req.get_status_line();
-    let req_path = Rc::new(RefCell::new(status_line[1].clone()));
     #[cfg(feature = "log")]
-    log::trace!("build_res -> req_path: {}", req_path.borrow());
+    log::trace!("build_res -> req_path: {}", status_line[1]);
 
     match status_line[0].as_str() {
-        "GET" => match config.get_routes(&mut req_path.borrow_mut()) {
+        "GET" => match config.get_routes(&status_line[1]) {
             Some(route) => {
                 #[cfg(feature = "log")]
-                log::debug!("Found path in routes!");
+                log::trace!("Found path in routes!");
 
-                let req_new = if route.wildcard().is_some() {
+                if route.wildcard().is_some() {
                     let stat_line = &status_line[1];
                     let split = stat_line
                         .split(&(route.get_path().to_string() + "/"))
                         .last()
                         .unwrap();
 
-                    req.set_wildcard(Some(split.into()))
-                } else {
-                    req
+                    req.set_wildcard(Some(split.into()));
                 };
 
                 /*if route.is_ret_res() {
@@ -195,14 +212,14 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                         .mime("text/plain")
                 }*/
 
-                route.to_res(req_new.to_owned())
+                route.to_res(req)
             }
 
             None => match config.get_mount() {
                 Some(old_path) => {
                     let path = old_path.to_owned() + &status_line[1];
                     if Path::new(&path).extension().is_none() && config.get_spa() {
-                        let body = read_to_vec(&(old_path.to_owned() + "/index.html")).unwrap();
+                        let body = read_to_vec(old_path.to_owned() + "/index.html").unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
 
                         Response::new()
@@ -252,12 +269,12 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                     .mime("text/html"),
             },
         },
-        "POST" => match config.post_routes(&mut req_path.borrow_mut()) {
+        "POST" => match config.post_routes(&status_line[1]) {
             Some(route) => {
                 #[cfg(feature = "log")]
                 log::debug!("POST");
 
-                let req_new = if route.wildcard().is_some() {
+                if route.wildcard().is_some() {
                     let stat_line = &status_line[1];
 
                     let split = stat_line
@@ -265,12 +282,10 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
                         .last()
                         .unwrap();
 
-                    req.set_wildcard(Some(split.into()))
-                } else {
-                    req
+                    req.set_wildcard(Some(split.into()));
                 };
 
-                route.to_res(req_new.to_owned())
+                route.to_res(req)
             }
 
             None => Response::new()
@@ -281,19 +296,34 @@ fn build_res(req: &mut Request, config: &Config) -> Response {
 
         _ => Response::new()
             .status_line("HTTP/1.1 404 NOT FOUND\r\n")
-            .body(b"<h1>404 Not Found</h1>".to_vec())
+            .body(b"<h1>Unkown Error Occurred</h1>".to_vec())
             .mime("text/html"),
     }
 }
 
+<<<<<<< HEAD
 fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
     let buf = read_stream(conn);
 
     // PERF: Must replace clone
     let mut request = build_and_parse_req(buf.clone());
+=======
+fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
+    let buf = read_stream(conn);
+    let request = build_and_parse_req(buf);
+>>>>>>> origin/main
 
-    let response = Rc::new(RefCell::new(build_res(&mut request, &config)));
+    if let Err(e) = request {
+        let specific_err = match e {
+            RequestError::StatusLineErr => b"failed to parse status line".to_vec(),
+            RequestError::HeadersErr => b"failed to parse headers".to_vec(),
+        };
+        Response::new()
+            .mime("text/plain")
+            .body(specific_err)
+            .send(conn);
 
+<<<<<<< HEAD
     if response.borrow().http2 {
         #[cfg(debug_assertions)]
         {
@@ -322,37 +352,76 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
             }
         }
         None => (),
+=======
+        return;
+>>>>>>> origin/main
     }
 
-    response
-        .borrow_mut()
-        .headers
-        .insert("Content-Type: ".to_string(), inferred_mime + "\r\n");
+    // NOTE:
+    // Err has been handled above
+    // Therefore, request should always be Ok
 
-    response
-        .borrow_mut()
-        .headers
-        .insert("X-:)-->: ".to_string(), "HEHEHE\r\n".to_string());
-
+    let request = unsafe { request.unwrap_unchecked() };
+    /*#[cfg(feature = "middleware")]
+    if let Some(req_middleware) = config.get_request_middleware() {
+        req_middleware.lock().unwrap()(&mut request);
+    };*/
     let req_headers = request.get_headers();
+    let _comp = if config.get_gzip() {
+        let i = if req_headers.contains_key("accept-encoding") {
+            let tmp_str = req_headers.get("accept-encoding").unwrap();
+            let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
 
-    let comp = if req_headers.contains_key("accept-encoding") {
-        let tmp_str: String = req_headers.get("accept-encoding").unwrap().to_owned();
-        let res = tmp_str.split(',').map(|s| s.trim().to_string()).collect();
+            #[cfg(feature = "log")]
+            log::trace!("{:#?}", &res);
 
-        #[cfg(feature = "log")]
-        log::debug!("{:#?}", &res);
-
-        res
+            res.contains(&"gzip")
+        } else {
+            false
+        };
+        i
     } else {
-        Vec::new()
+        false
     };
 
+    let mut response = build_res(request, &config);
+
+    let mime = response.mime.as_ref().unwrap();
+
+    let inferred_mime = if let Some(mime_inferred) = infer::get(response.body.as_ref().unwrap()) {
+        mime_inferred.mime_type()
+    } else {
+        mime.as_str()
+    };
+
+    if let Some(config_headers) = config.get_headers() {
+        response.headers.extend(
+            config_headers
+                .iter()
+                .map(|(i, j)| (i.to_owned(), j.to_owned())),
+        );
+        //        for (i, j) in config_headers.iter() {
+        //            res_brw.headers.insert(i.to_string(), j.to_string());
+        //        }
+    }
+
+    response.headers.extend([
+        (
+            "Content-Type: ".to_string(),
+            inferred_mime.to_owned() + "\r\n",
+        ),
+        (
+            "tinyhttp: ".to_string(),
+            env!("CARGO_PKG_VERSION").to_string() + "\r\n",
+        ),
+    ]);
+
+    // Only check for 'accept-encoding' header
+    // when compression is enabled
+
     #[cfg(feature = "sys")]
-    if config.get_gzip()
-        && comp.contains(&"gzip".to_string())
-        && req_headers.contains_key("accept-encoding")
     {
+<<<<<<< HEAD
         #[cfg(feature = "log")]
         log::debug!("GZIP ENABLED!");
         let start: Instant = std::time::Instant::now();
@@ -388,19 +457,33 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
         brw.send(conn);
         brw.send_http_2(conn);
         return;
+=======
+        if _comp {
+            let mut writer = GzEncoder::new(Vec::new(), Compression::default());
+            writer.write_all(response.body.as_ref().unwrap()).unwrap();
+            response.body = Some(writer.finish().unwrap());
+            response
+                .headers
+                .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
+        }
+>>>>>>> origin/main
     }
 
     #[cfg(feature = "log")]
     {
-        let brw = response.borrow_mut();
-        log::debug!(
+        log::trace!(
             "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-            brw.body.as_ref().unwrap(),
-            brw.headers,
+            response.body.as_ref().unwrap(),
+            response.headers,
         );
     }
 
-    response.borrow_mut().send(conn);
+    /*#[cfg(feature = "middleware")]
+    if let Some(middleware) = config.get_response_middleware() {
+        middleware.lock().unwrap()(res_brw.deref_mut());
+    }*/
+
+    response.send(conn);
 }
 
 pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
@@ -415,7 +498,7 @@ pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 }
 
 pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 512;
+    let buffer_size = 1024;
     let mut request_buffer = vec![];
     loop {
         let mut buffer = vec![0; buffer_size];

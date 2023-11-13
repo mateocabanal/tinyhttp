@@ -3,20 +3,8 @@ use std::{
     io::{Read, Write},
 };
 
-use crate::{
-    http::read_stream,
-    http2::{connection::parse_buffer_to_frames, frame::*},
-};
-
-macro_rules! unpack_octets_4 {
-    // TODO: Get rid of this macro
-    ($buf:expr, $offset:expr, $tip:ty) => {
-        (($buf[$offset + 0] as $tip) << 24)
-            | (($buf[$offset + 1] as $tip) << 16)
-            | (($buf[$offset + 2] as $tip) << 8)
-            | (($buf[$offset + 3] as $tip) << 0)
-    };
-}
+#[cfg(feature = "async")]
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Clone, Debug)]
 pub struct Response {
@@ -27,25 +15,49 @@ pub struct Response {
     pub http2: bool,
 }
 
+impl Default for Response {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'a> From<&'a str> for Response {
+    fn from(value: &'a str) -> Self {
+        Response::new().body(value.into()).mime("text/plain").status_line("HTTP/1.1 200 OK")
+    }
+}
+
+impl From<String> for Response {
+    fn from(value: String) -> Self {
+        Response::new().body(value.into_bytes()).mime("text/plain").status_line("HTTP/1.1 200 OK")
+    }
+}
+
+impl From<Vec<u8>> for Response {
+    fn from(value: Vec<u8>) -> Self {
+        Response::new().body(value).mime("application/octet-stream").status_line("HTTP/1.1 200 OK")
+    }
+}
+
 impl Response {
     pub fn new() -> Response {
         Response {
             headers: HashMap::new(),
             status_line: String::new(),
             body: None,
-            mime: None,
+            mime: Some(String::from("HTTP/1.1 200 OK")),
             http2: false,
         }
     }
 
-    #[allow(dead_code)]
     pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
         self.headers = headers;
         self
     }
 
     pub fn status_line<P: Into<String>>(mut self, line: P) -> Self {
-        self.status_line = line.into();
+        let line_str = line.into();
+        self.status_line = line_str.trim().to_string() + "\r\n";
         self
     }
 
@@ -62,42 +74,43 @@ impl Response {
         self
     }
 
+    #[cfg(not(feature = "async"))]
     pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
-        let line_bytes = self.status_line.as_bytes().to_vec();
+        let line_bytes = self.status_line.as_bytes();
         #[cfg(feature = "log")]
-        log::debug!("res status line: {:#?}", self.status_line);
+        log::trace!("res status line: {:#?}", self.status_line);
 
-        let mut header_bytes = Vec::from_iter(
-            self.headers
-                .iter()
-                .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()]),
-        );
-        let mut full_req = Vec::new();
-        for i in line_bytes {
-            full_req.push(i);
-        }
-        header_bytes.push(b"\r\n");
-        for i in header_bytes {
-            for j in i {
-                full_req.push(*j);
-            }
-        }
+        let mut header_bytes: Vec<u8> = self
+            .headers
+            .iter()
+            .flat_map(|(i, j)| [i.as_bytes(), j.as_bytes()].concat())
+            .collect();
 
-        #[cfg(feature = "log")]
-        log::debug!(
-            "RESPONSE HEADERS (AFTER PARSE): {}",
-            String::from_utf8(full_req.clone()).unwrap()
-        );
+        header_bytes.extend(b"\r\n");
 
-        if let Some(i) = self.body.as_ref() {
-            for j in i {
-                full_req.push(*j);
-            }
-        }
+        #[cfg(all(feature = "log", debug_assertions))]
+        {
+            log::trace!(
+                "HEADER AS STR: {}",
+                String::from_utf8(header_bytes.clone()).unwrap()
+            );
+            log::trace!(
+                "STATUS LINE AS STR: {}",
+                std::str::from_utf8(line_bytes).unwrap()
+            );
+        };
 
-        sock.write_all(&full_req).unwrap();
+        let full_req: &[u8] = &[
+            line_bytes,
+            header_bytes.as_slice(),
+            self.body.as_ref().unwrap(),
+        ]
+        .concat();
+
+        sock.write_all(full_req).unwrap();
     }
 
+<<<<<<< HEAD
     pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {
         // sock.write_all(
         //     b"HTTP/1.1 101 Switching Protocols \r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n",
@@ -118,12 +131,35 @@ impl Response {
         //let mut buf = read_stream(sock);
         //buf.drain(0..=23);
         //let frame = parse_data_frame(&buf).unwrap();
+=======
+    #[cfg(feature = "async")]
+    pub(crate) async fn send<P: AsyncReadExt + AsyncWriteExt + Unpin>(&self, sock: &mut P) {
+        let line_bytes = self.status_line.as_bytes();
+        #[cfg(feature = "log")]
+        log::trace!("res status line: {:#?}", self.status_line);
 
-        let mut term = false;
+        let mut header_bytes: Vec<u8> = self
+            .headers
+            .iter()
+            .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()].concat())
+            .collect();
+>>>>>>> origin/main
 
-        while !term {
-            let buf = read_stream(sock);
+        header_bytes.extend(b"\r\n");
 
+        #[cfg(all(feature = "log", debug_assertions))]
+        {
+            log::trace!(
+                "HEADER AS STR: {}",
+                String::from_utf8(header_bytes.clone()).unwrap()
+            );
+            log::trace!(
+                "STATUS LINE AS STR: {}",
+                std::str::from_utf8(line_bytes).unwrap()
+            );
+        };
+
+<<<<<<< HEAD
             #[cfg(feature = "log")]
             //log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
             let mut frames = parse_buffer_to_frames(buf);
@@ -209,5 +245,15 @@ impl Response {
                 }
             }
         }
+=======
+        let full_req: &[u8] = &[
+            line_bytes,
+            header_bytes.as_slice(),
+            self.body.as_ref().unwrap(),
+        ]
+        .concat();
+
+        sock.write_all(full_req).await.unwrap();
+>>>>>>> origin/main
     }
 }

@@ -1,0 +1,3 @@
+[submodule "heroku-html"]
+	path = "heroku-html"
+	url = https://github.com/mateocabanal/tinyhttp-heroku-html

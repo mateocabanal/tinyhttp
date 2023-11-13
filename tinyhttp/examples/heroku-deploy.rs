@@ -9,8 +9,12 @@ fn api_get() -> &'static str {
 }
 
 #[post("/")]
-fn post(body: Request) -> String {
-    format!("Hello, {:?}\n", body.get_parsed_body().unwrap())
+fn post(msg: Option<&str>) -> String {
+    if let Some(msg) = msg {
+        format!("Hello, {msg}\n")
+    } else {
+        String::from("Body received is not a valid string!\n")
+    }
 }
 
 #[post("/w")]
@@ -41,6 +45,11 @@ fn update_html() -> &'static str {
     "OK"
 }
 
+#[get("/version")]
+fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 fn init_html() {
     Command::new("wget")
         .arg("https://github.com/mateocabanal/tinyhttp-heroku-html/archive/refs/heads/main.zip")
@@ -63,6 +72,10 @@ fn init_html() {
 }
 
 fn main() {
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .init()
+        .unwrap();
     init_html();
     let socket = TcpListener::bind(":::8080").unwrap();
     let routes = Routes::new(vec![
@@ -73,6 +86,7 @@ fn main() {
         get_wildcard(),
         post_wildcard(),
         post_return_vec(),
+        version(),
     ]);
     let config = Config::new()
         .routes(routes)
