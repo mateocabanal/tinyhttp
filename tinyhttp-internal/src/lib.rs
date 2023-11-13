@@ -12,6 +12,9 @@ pub mod http;
 #[cfg(feature = "async")]
 pub mod async_http;
 
+#[cfg(feature = "http2")]
+pub mod http2;
+
 #[cfg(test)]
 mod tests {
 

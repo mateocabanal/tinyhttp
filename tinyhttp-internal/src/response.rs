@@ -80,26 +80,9 @@ impl Response {
         #[cfg(feature = "log")]
         log::trace!("res status line: {:#?}", self.status_line);
 
-        let mut header_bytes: Vec<u8> = self
-            .headers
-            .iter()
-            .flat_map(|(i, j)| [i.as_bytes(), j.as_bytes()].concat())
-            .collect();
+        let mut header_bytes: Vec<u8> = self.headers.iter().flat_map(|(i, j)| [i.as_bytes(), j.as_bytes()].concat()).collect();
 
         header_bytes.extend(b"\r\n");
-
-        #[cfg(all(feature = "log", debug_assertions))]
-        {
-            log::trace!(
-                "HEADER AS STR: {}",
-                String::from_utf8(header_bytes.clone()).unwrap()
-            );
-            log::trace!(
-                "STATUS LINE AS STR: {}",
-                std::str::from_utf8(line_bytes).unwrap()
-            );
-        };
-
         let full_req: &[u8] = &[
             line_bytes,
             header_bytes.as_slice(),
@@ -110,8 +93,10 @@ impl Response {
         sock.write_all(full_req).unwrap();
     }
 
-<<<<<<< HEAD
+    #[cfg(feature = "http2")]
     pub(crate) fn send_http_2<P: Read + Write>(&self, sock: &mut P) {
+        use crate::http2::frame::SettingsFrame;
+
         // sock.write_all(
         //     b"HTTP/1.1 101 Switching Protocols \r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n",
         // )
@@ -131,7 +116,8 @@ impl Response {
         //let mut buf = read_stream(sock);
         //buf.drain(0..=23);
         //let frame = parse_data_frame(&buf).unwrap();
-=======
+    }
+
     #[cfg(feature = "async")]
     pub(crate) async fn send<P: AsyncReadExt + AsyncWriteExt + Unpin>(&self, sock: &mut P) {
         let line_bytes = self.status_line.as_bytes();
@@ -143,7 +129,6 @@ impl Response {
             .iter()
             .flat_map(|s| [s.0.as_bytes(), s.1.as_bytes()].concat())
             .collect();
->>>>>>> origin/main
 
         header_bytes.extend(b"\r\n");
 
@@ -159,7 +144,6 @@ impl Response {
             );
         };
 
-<<<<<<< HEAD
             #[cfg(feature = "log")]
             //log::trace!("BUFFER BEFORE parse_buffer_to_frames: {:?}", buf);
             let mut frames = parse_buffer_to_frames(buf);
@@ -245,15 +229,4 @@ impl Response {
                 }
             }
         }
-=======
-        let full_req: &[u8] = &[
-            line_bytes,
-            header_bytes.as_slice(),
-            self.body.as_ref().unwrap(),
-        ]
-        .concat();
-
-        sock.write_all(full_req).await.unwrap();
->>>>>>> origin/main
     }
-}

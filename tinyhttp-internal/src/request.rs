@@ -78,8 +78,8 @@ impl Request {
     }
 
     /// Get status line of request
-    pub fn get_status_line<'a>(&'a self) -> &'a [String] {
-        &*self.status_line
+    pub fn get_status_line(&self) -> &[String] {
+        &self.status_line
     }
 
     pub fn get_wildcard(&self) -> Option<&String> {

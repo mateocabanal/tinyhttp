@@ -33,7 +33,7 @@ version = "1.3"
 optional = true
 
 [features]
-default = ["sys", "log"]
+default = ["sys", "log", "log"]
 openssl_vendor = ["ssl", "openssl?/vendored"]
 middleware = []
 async = ["dep:tokio"]

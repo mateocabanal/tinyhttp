@@ -16,7 +16,6 @@ use crate::{
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
 
-<<<<<<< HEAD
 #[cfg(feature = "async")]
 use async_std::io::{Read, Write};
 
@@ -26,19 +25,12 @@ use async_std::{
     task::spawn,
 };
 
-use crate::{
-    config::{Config, HttpListener},
-    http2::{self, connection::parse_data_frame},
-    request::Request,
-    response::Response,
-};
+#[cfg(feature = "http2")]
+use crate::http2::{self, connection::parse_data_frame};
 
 #[cfg(not(feature = "async"))]
-pub(crate) fn start_http(http: HttpListener) {
-=======
 pub(crate) fn start_http(http: HttpListener, config: Config) {
     let arc_config = Arc::new(config);
->>>>>>> origin/main
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
 
@@ -81,7 +73,6 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
     #[cfg(feature = "log")]
     log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
 
-<<<<<<< HEAD
     #[cfg(feature = "http2")]
     if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") && cfg!(debug_assertions) {
         #[cfg(debug_assertions)]
@@ -92,11 +83,9 @@ fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
             };
         }
 
-        return Request::new(buf, vec![], vec![], None).set_http2(true);
+        return Ok(Request::new(&buf, vec![], vec![], None).set_http2(true));
     }
 
-=======
->>>>>>> origin/main
     let mut safe_http_index = buf.windows(2).enumerate();
     let status_line_index_opt = safe_http_index
         .find(|(_, w)| matches!(*w, b"\r\n"))
@@ -301,60 +290,21 @@ fn build_res(mut req: Request, config: &Config) -> Response {
     }
 }
 
-<<<<<<< HEAD
-fn parse_request<P: Read + Write>(conn: &mut P, config: Config) {
-    let buf = read_stream(conn);
-
-    // PERF: Must replace clone
-    let mut request = build_and_parse_req(buf.clone());
-=======
 fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     let buf = read_stream(conn);
-    let request = build_and_parse_req(buf);
->>>>>>> origin/main
+
+    let request = build_and_parse_req(buf.clone());
 
     if let Err(e) = request {
         let specific_err = match e {
-            RequestError::StatusLineErr => b"failed to parse status line".to_vec(),
-            RequestError::HeadersErr => b"failed to parse headers".to_vec(),
+            RequestError::StatusLineErr => b"failed to parse status line\r\n".to_vec(),
+            RequestError::HeadersErr => b"failed to parse headers\r\n".to_vec(),
         };
         Response::new()
             .mime("text/plain")
             .body(specific_err)
             .send(conn);
-
-<<<<<<< HEAD
-    if response.borrow().http2 {
-        #[cfg(debug_assertions)]
-        {
-            let frame = parse_data_frame(buf.clone().as_ref());
-            if let Ok(frame) = frame {
-                log::debug!("build_and_parse_req() -> frame: {:#?}", frame);
-            };
-        }
-        response.borrow_mut().send_http_2(conn);
         return;
-    }
-    let mime = response.borrow().mime.clone().unwrap();
-
-    let inferred_mime = match infer::get(response.borrow().body.as_ref().unwrap()) {
-        Some(mime) => mime.mime_type().to_string(),
-        None => mime,
-    };
-
-    match config.get_headers() {
-        Some(vec) => {
-            for (i, j) in vec.iter() {
-                response
-                    .borrow_mut()
-                    .headers
-                    .insert(i.to_string(), j.to_string());
-            }
-        }
-        None => (),
-=======
-        return;
->>>>>>> origin/main
     }
 
     // NOTE:
@@ -367,6 +317,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
         req_middleware.lock().unwrap()(&mut request);
     };*/
     let req_headers = request.get_headers();
+
     let _comp = if config.get_gzip() {
         let i = if req_headers.contains_key("accept-encoding") {
             let tmp_str = req_headers.get("accept-encoding").unwrap();
@@ -384,7 +335,38 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
         false
     };
 
+    #[cfg(feature = "http2")]
+    if request.get_headers().contains_key("connection") {
+        #[cfg(feature = "log")]
+        log::trace!("parse_request: found connection header, upgrading to http/2");
+
+        let mut response = Response::new();
+
+        response.headers.extend([
+            ("Connection: ".to_owned(), "Upgrade\r\n".to_owned()),
+            ("Upgrade: ".to_owned(), "h2c\r\n".to_owned()),
+        ]);
+
+        response.body = Some(vec![]);
+        response.status_line = "HTTP/1.1 101 Switching Protocols\r\n".to_owned();
+        response.send(conn);
+        response.send_http_2(conn);
+        return;
+    }
     let mut response = build_res(request, &config);
+
+    #[cfg(feature = "http2")]
+    if response.http2 {
+        #[cfg(debug_assertions)]
+        {
+            let frame = parse_data_frame(&buf);
+            if let Ok(frame) = frame {
+                log::debug!("build_and_parse_req() -> frame: {:#?}", frame);
+            };
+        }
+        response.send_http_2(conn);
+        return;
+    }
 
     let mime = response.mime.as_ref().unwrap();
 
@@ -421,43 +403,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
 
     #[cfg(feature = "sys")]
     {
-<<<<<<< HEAD
-        #[cfg(feature = "log")]
-        log::debug!("GZIP ENABLED!");
-        let start: Instant = std::time::Instant::now();
-        let body = response.borrow_mut().body.clone();
-        let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-        writer.write_all(&body.unwrap()).unwrap();
-        response.borrow_mut().body = Some(writer.finish().unwrap());
-        response
-            .borrow_mut()
-            .headers
-            .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
-        #[cfg(feature = "log")]
-        log::debug!("COMPRESS TOOK {} SECS", start.elapsed().as_secs());
-    }
-
-    let mut upgrade = String::from("");
-
-    #[cfg(feature = "http2")]
-    if req_headers.contains_key("connection") {
-        #[cfg(feature = "log")]
-        log::trace!("parse_request: found connection header, upgrading to http/2");
-
-        upgrade = req_headers.get("connection").unwrap().to_string();
-
-        let mut brw = response.borrow_mut();
-        brw.headers
-            .insert("Connection: ".to_owned(), "Upgrade\r\n".to_owned());
-
-        brw.headers
-            .insert("Upgrade: ".to_owned(), "h2c\r\n".to_owned());
-        brw.body = Some(vec![]);
-        brw.status_line = "HTTP/1.1 101 Switching Protocols\r\n".to_owned();
-        brw.send(conn);
-        brw.send_http_2(conn);
-        return;
-=======
         if _comp {
             let mut writer = GzEncoder::new(Vec::new(), Compression::default());
             writer.write_all(response.body.as_ref().unwrap()).unwrap();
@@ -466,7 +411,6 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
                 .headers
                 .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
         }
->>>>>>> origin/main
     }
 
     #[cfg(feature = "log")]
@@ -519,6 +463,5 @@ pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
             }
         }
     }
-
     request_buffer
 }
