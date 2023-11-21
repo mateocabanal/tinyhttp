@@ -40,3 +40,6 @@ async = ["dep:tokio"]
 ssl = ["dep:openssl"]
 sys = ["ssl", "dep:flate2"]
 log = ["dep:log"]
+
+[dev-dependencies]
+criterion = "0.5.1"

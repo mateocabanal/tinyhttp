@@ -16,7 +16,7 @@ use crate::{
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
 
-pub(crate) fn start_http(http: HttpListener, config: Config) {
+pub fn start_http(http: HttpListener, config: Config) {
     let arc_config = Arc::new(config);
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
@@ -264,7 +264,7 @@ fn build_res(mut req: Request, config: &Config) -> Response {
     }
 }
 
-fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
+pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     let buf = read_stream(conn);
     let request = build_and_parse_req(buf);
 
@@ -372,7 +372,7 @@ fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     response.send(conn);
 }
 
-pub fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
+fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     fn inner(path: &Path) -> io::Result<Vec<u8>> {
         let file = File::open(path).unwrap();
         let mut content: Vec<u8> = Vec::new();

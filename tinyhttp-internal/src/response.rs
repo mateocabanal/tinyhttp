@@ -107,6 +107,9 @@ impl Response {
         ]
         .concat();
 
+        #[cfg(feature = "log")]
+        log::trace!("size of response: {}", full_req.len());
+
         sock.write_all(full_req).unwrap();
     }
 
