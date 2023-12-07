@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp-codegen"
-version = "0.4.0-rc4"
+version = "0.4.0-rc5"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 edition = "2018"
 license = "GPL-2.0-or-later"
@@ -16,4 +16,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1.0.18"
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0-rc4", default-features = false }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0-rc5", default-features = false }
