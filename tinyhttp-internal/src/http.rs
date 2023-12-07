@@ -292,7 +292,7 @@ pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     };*/
     let req_headers = request.get_headers();
     let _comp = if config.get_gzip() {
-        let i = if req_headers.contains_key("accept-encoding") {
+        if req_headers.contains_key("accept-encoding") {
             let tmp_str = req_headers.get("accept-encoding").unwrap();
             let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
 
@@ -302,8 +302,7 @@ pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
             res.contains(&"gzip")
         } else {
             false
-        };
-        i
+        }
     } else {
         false
     };
