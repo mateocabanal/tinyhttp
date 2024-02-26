@@ -175,7 +175,7 @@ pub struct GetRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
-    get_body: Option<fn(Request) -> Response>,
+    get_body: Option<fn(&mut Request) -> Response>,
 }
 
 impl Default for GetRouteWithReqAndRes {
@@ -205,19 +205,19 @@ impl GetRouteWithReqAndRes {
         self.wildcard = Some(wildcard);
         self
     }
-    pub fn set_body(mut self, body: fn(Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&'_ mut Request) -> Response) -> Self {
         self.get_body = Some(body);
         self
     }
 
-    pub fn get_body(&self) -> Option<fn(Request) -> Response> {
+    pub fn get_body(&self) -> Option<fn(&'_ mut Request) -> Response> {
         self.get_body
     }
 }
 
 impl ToResponse for GetRouteWithReqAndRes {
-    fn to_res(&self, req: Request) -> Response {
-        self.get_body().unwrap()(req)
+    fn to_res(&self, mut req: Request) -> Response {
+        self.get_body().unwrap()(&mut req)
     }
 }
 

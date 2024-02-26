@@ -1,11 +1,17 @@
-use std::{collections::HashMap, mem};
+use std::{collections::HashMap, fmt::Display, mem};
 
 #[derive(Clone, Debug, Default)]
-pub struct Wildcard<T> {
+pub struct Wildcard<T: Display> {
     wildcard: T,
 }
 
-impl<T> Wildcard<T> {
+impl<T: Display> Display for Wildcard<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_wildcard())
+    }
+}
+
+impl<T: Display> Wildcard<T> {
     pub fn get_wildcard(&self) -> &T {
         &self.wildcard
     }
@@ -18,7 +24,7 @@ impl<T> Wildcard<T> {
 /// body is used when the body of the request is not a String
 #[derive(Clone, Debug, Default)]
 pub struct Request {
-    raw_headers: Vec<String>,
+    raw_headers: HashMap<String, String>,
     status_line: Vec<String>,
     body: Vec<u8>,
     wildcard: Option<String>,
@@ -33,13 +39,13 @@ pub enum BodyType {
 
 impl Request {
     pub fn new(
-        raw_body: &[u8],
-        raw_headers: Vec<String>,
+        body: Vec<u8>,
+        raw_headers: HashMap<String, String>,
         status_line: Vec<String>,
         wildcard: Option<String>,
     ) -> Request {
         Request {
-            body: raw_body.to_vec(),
+            body,
             raw_headers,
             status_line,
             wildcard,
@@ -67,19 +73,16 @@ impl Request {
     }
 
     /// Get request headers in a HashMap
-    pub fn get_headers(&self) -> HashMap<&str, &str> {
+    pub fn get_headers(&self) -> &HashMap<String, String> {
         #[cfg(feature = "log")]
         log::trace!("Headers: {:#?}", self.raw_headers);
-        self.raw_headers
-            .iter()
-            .map(|i| i.split(": "))
-            .map(|mut i| (i.next().unwrap(), i.next().unwrap()))
-            .collect::<HashMap<&str, &str>>()
+
+        &self.raw_headers
     }
 
     /// Get status line of request
-    pub fn get_status_line<'a>(&'a self) -> &'a [String] {
-        &*self.status_line
+    pub fn get_status_line(&self) -> &[String] {
+        &self.status_line
     }
 
     pub fn get_wildcard(&self) -> Option<&String> {
@@ -104,11 +107,17 @@ impl<'a> From<&'a mut Request> for Wildcard<&'a str> {
     }
 }
 
-impl<'a> From<&'a mut Request> for Wildcard<&'a [u8]> {
+//impl<'a> From<&'a mut Request> for Wildcard<&'a [u8]> {
+//    fn from(value: &'a mut Request) -> Self {
+//        Wildcard {
+//            wildcard: value.wildcard.as_ref().unwrap().as_bytes(),
+//        }
+//    }
+//}
+
+impl<'a> From<&'a mut Request> for &'a HashMap<String, String> {
     fn from(value: &'a mut Request) -> Self {
-        Wildcard {
-            wildcard: value.wildcard.as_ref().unwrap().as_bytes(),
-        }
+        value.get_headers()
     }
 }
 

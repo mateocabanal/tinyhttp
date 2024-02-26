@@ -1,6 +1,6 @@
 use std::{
-    io::{self, BufReader},
-    iter::FromIterator,
+    collections::HashMap,
+    io::{self, BufRead, BufReader},
     path::Path,
     sync::Arc,
 };
@@ -17,6 +17,12 @@ use crate::{
 use flate2::{write::GzEncoder, Compression};
 
 pub fn start_http(http: HttpListener, config: Config) {
+    #[cfg(feature = "log")]
+    log::info!(
+        "Listening on port {}",
+        http.socket.local_addr().unwrap().port()
+    );
+
     let arc_config = Arc::new(config);
     for stream in http.get_stream() {
         let mut conn = stream.unwrap();
@@ -56,93 +62,85 @@ pub fn start_http(http: HttpListener, config: Config) {
     }
 }
 
-fn build_and_parse_req(buf: Vec<u8>) -> Result<Request, RequestError> {
+fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
+    let mut buf_reader = BufReader::new(conn);
+    let mut status_line_str = String::new();
+
+    buf_reader.read_line(&mut status_line_str).unwrap();
+    status_line_str.drain(status_line_str.len() - 2..status_line_str.len());
+
     #[cfg(feature = "log")]
-    log::trace!("build_and_parse_req ~~> buf: {:?}", buf);
+    log::trace!("STATUS LINE: {:#?}", status_line_str);
 
-    let mut safe_http_index = buf.windows(2).enumerate();
-    let status_line_index_opt = safe_http_index
-        .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i);
+    let iter = buf_reader.fill_buf().unwrap();
+    let header_end_idx = iter
+        .windows(4)
+        .position(|w| matches!(w, b"\r\n\r\n"))
+        .unwrap();
 
-    let status_line_index = if let Some(status) = status_line_index_opt {
-        status
-    } else {
-        #[cfg(feature = "log")]
-        log::error!("failed parsing status line!");
+    #[cfg(feature = "log")]
+    log::trace!("Body starts at {}", header_end_idx);
+    let headers_buf = iter[..header_end_idx + 2].to_vec();
 
-        return Err(RequestError::StatusLineErr);
-    };
+    buf_reader.consume(header_end_idx + 4); // Add 4 bytes since header_end_idx does not count
+                                            // \r\n\r\n
 
-    let first_header_index = if let Some(first_header_index) = safe_http_index
+    let mut headers = HashMap::new();
+    let mut headers_index = 0;
+
+    let mut headers_buf_iter = headers_buf.windows(2).enumerate();
+
+    //Sort through all request headers
+    while let Some(header_index) = headers_buf_iter
         .find(|(_, w)| matches!(*w, b"\r\n"))
         .map(|(i, _)| i)
-    {
-        first_header_index
-    } else {
-        #[cfg(feature = "log")]
-        log::warn!("no headers found!");
-
-        0usize
-    };
-
-    #[cfg(feature = "log")]
-    log::trace!(
-        "STATUS LINE: {:#?}",
-        std::str::from_utf8(&buf[..status_line_index])
-    );
-
-    #[cfg(feature = "log")]
-    log::trace!(
-        "FIRST HEADER: {:#?}",
-        std::str::from_utf8(&buf[status_line_index + 2..first_header_index])
-    );
-
-    let mut headers = Vec::<String>::new();
-    let mut headers_index = first_header_index + 2;
-
-    // Sort through all request headers
-    while let Some(header_index) = safe_http_index
-        .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i + 2)
     {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
-        let header = std::str::from_utf8(&buf[headers_index..header_index - 2])
+        let header = std::str::from_utf8(&headers_buf[headers_index..header_index])
             .unwrap()
             .to_lowercase();
+
         if header.is_empty() {
             break;
         }
         #[cfg(feature = "log")]
-        log::trace!("HEADER: {:?}", headers);
+        log::trace!("HEADER: {:?}", header);
 
-        headers_index = header_index;
-        headers.push(header);
+        headers_index = header_index + 2;
+
+        let mut colon_split = header.splitn(2, ':');
+        headers.insert(
+            colon_split.next().unwrap().to_string(),
+            colon_split.next().unwrap().trim().to_string(),
+        );
     }
 
-    let iter_status_line = std::str::from_utf8(&buf[..status_line_index]).unwrap();
-
-    //let headers = parse_headers(http.to_string());
-    let str_status_line = Vec::from_iter(iter_status_line.split_whitespace());
-    let status_line: Vec<String> = str_status_line.into_iter().map(|i| i.to_string()).collect();
-    #[cfg(feature = "log")]
-    log::trace!("{:#?}", status_line);
-    let body_index = buf
-        .windows(4)
-        .enumerate()
-        .find(|(_, w)| matches!(*w, b"\r\n\r\n"))
-        .map(|(i, _)| i)
+    let body_len = headers
+        .get("content-length")
+        .unwrap_or(&String::from("0"))
+        .parse::<usize>()
         .unwrap();
 
-    let raw_body = &buf[body_index + 4..];
-    //    #[cfg(feature = "log")]
-    //    log::debug!(
-    //        "BODY (TOP): {:#?}",
-    //        std::str::from_utf8(&buf[body_index + 4..]).unwrap()
-    //    );
-    Ok(Request::new(raw_body, headers, status_line, None))
+    let mut raw_body = Vec::with_capacity(body_len);
+
+    // Zero-init raw_body
+    (0..body_len).for_each(|_| {
+        raw_body.push(0);
+    });
+
+    buf_reader.read_exact(&mut raw_body).unwrap();
+
+    Ok(Request::new(
+        raw_body,
+        headers,
+        status_line_str
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect(),
+        None,
+    ))
 }
 
 fn build_res(mut req: Request, config: &Config) -> Response {
@@ -265,8 +263,7 @@ fn build_res(mut req: Request, config: &Config) -> Response {
 }
 
 pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
-    let buf = read_stream(conn);
-    let request = build_and_parse_req(buf);
+    let request = build_and_parse_req(conn);
 
     if let Err(e) = request {
         let specific_err = match e {
@@ -380,30 +377,4 @@ fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
         Ok(content)
     }
     inner(path.as_ref())
-}
-
-pub(crate) fn read_stream<P: Read>(stream: &mut P) -> Vec<u8> {
-    let buffer_size = 1024;
-    let mut request_buffer = vec![];
-    loop {
-        let mut buffer = vec![0; buffer_size];
-        match stream.read(&mut buffer) {
-            Ok(n) => {
-                if n == 0 {
-                    break;
-                } else if n < buffer_size {
-                    request_buffer.append(&mut buffer[..n].to_vec());
-                    break;
-                } else {
-                    request_buffer.append(&mut buffer);
-                }
-            }
-            Err(e) => {
-                println!("Error: Could not read string!: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-
-    request_buffer
 }

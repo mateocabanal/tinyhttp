@@ -14,8 +14,8 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     let body = item_fn.block.deref();
     let return_type = sig.output;
 
-    let body_args = sig.inputs;
-    let is_body_args = !body_args.is_empty();
+    let fn_args = sig.inputs;
+    let is_body_args = !fn_args.is_empty();
     //eprintln!("LEN: {}", body_args.len());
 
     let mut path = value.value();
@@ -74,13 +74,24 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     //            get_route = get_route.set_body(body);
     //        }
     let new_get_body = if is_body_args {
+        let first_arg_name = fn_args.first().unwrap();
+        let arg_type = match first_arg_name {
+            syn::FnArg::Typed(i) => i.to_owned(),
+            _ => todo!(),
+        };
         quote! {
             let mut get_route = GetRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body(#body_args) -> Response {
+            fn body<'b>(try_from_req: &'b mut Request) -> Response {
+                let #arg_type = try_from_req.into();
                 #body.into()
             }
+
+            // OG
+            // fn body(#body_args) -> Response {
+            // #body.into()
+            // }
 
             get_route = get_route.set_body(body);
         }
