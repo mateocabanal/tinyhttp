@@ -14,13 +14,17 @@ pub mod async_http;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
 
     #[test]
     fn build_request() {
         use crate::request::Request;
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "text/plain".to_string());
+
         let request = Request::new(
-            b"Hello, World!",
-            vec!["Content-Type: text/plain".to_string()],
+            b"Hello, World!".to_vec(),
+            headers,
             vec![
                 "GET".to_string(),
                 "/test".to_string(),

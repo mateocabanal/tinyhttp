@@ -123,12 +123,7 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
         .parse::<usize>()
         .unwrap();
 
-    let mut raw_body = Vec::with_capacity(body_len);
-
-    // Zero-init raw_body
-    (0..body_len).for_each(|_| {
-        raw_body.push(0);
-    });
+    let mut raw_body = vec![0; body_len];
 
     buf_reader.read_exact(&mut raw_body).unwrap();
 

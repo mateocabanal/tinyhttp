@@ -95,7 +95,7 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::OnceLock, thread, time::Duration};
+    use std::{collections::HashMap, sync::OnceLock, thread, time::Duration};
 
     static HTTP_ENABLED: OnceLock<bool> = OnceLock::new();
 
@@ -189,7 +189,7 @@ mod tests {
             let headers = body.get_headers();
             format!(
                 "Accept-Encoding: {}",
-                headers.get("Accept-Encoding").unwrap()
+                headers.get("accept-encoding").unwrap()
             )
         }
 
@@ -202,9 +202,13 @@ mod tests {
             .unwrap()
             .wildcard()
             .is_none());
+
+        let mut headers = HashMap::new();
+        headers.insert("accept-encoding".to_string(), "gzip".to_string());
+
         let request = Request::new(
-            b"Hello",
-            vec!["Accept-Encoding: gzip".to_string()],
+            b"Hello".to_vec(),
+            headers,
             vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
             None,
         );

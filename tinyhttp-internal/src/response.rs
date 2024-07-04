@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    error::Error,
     io::{Read, Write},
 };
 
@@ -23,19 +24,55 @@ impl Default for Response {
 
 impl<'a> From<&'a str> for Response {
     fn from(value: &'a str) -> Self {
-        Response::new().body(value.into()).mime("text/plain").status_line("HTTP/1.1 200 OK")
+        Response::new()
+            .body(value.into())
+            .mime("text/plain")
+            .status_line("HTTP/1.1 200 OK")
     }
 }
 
 impl From<String> for Response {
     fn from(value: String) -> Self {
-        Response::new().body(value.into_bytes()).mime("text/plain").status_line("HTTP/1.1 200 OK")
+        Response::new()
+            .body(value.into_bytes())
+            .mime("text/plain")
+            .status_line("HTTP/1.1 200 OK")
     }
 }
 
 impl From<Vec<u8>> for Response {
     fn from(value: Vec<u8>) -> Self {
-        Response::new().body(value).mime("application/octet-stream").status_line("HTTP/1.1 200 OK")
+        Response::new()
+            .body(value)
+            .mime("application/octet-stream")
+            .status_line("HTTP/1.1 200 OK")
+    }
+}
+
+impl From<()> for Response {
+    fn from(_value: ()) -> Self {
+        Response::new()
+            .body(vec![])
+            .mime("text/plain")
+            .status_line("HTTP/1.1 403 Forbidden")
+    }
+}
+
+impl<T: Into<Response>, E: Error + Into<Response>> From<Result<T, E>> for Response {
+    fn from(value: Result<T, E>) -> Self {
+        match value {
+            Ok(body) => body.into(),
+            Err(e) => e.into(),
+        }
+    }
+}
+
+impl From<Box<dyn Error>> for Response {
+    fn from(value: Box<dyn Error>) -> Self {
+        Response::new()
+            .body(value.to_string().into_bytes())
+            .mime("text/plain")
+            .status_line("HTTP/1.1 403 Forbidden")
     }
 }
 
