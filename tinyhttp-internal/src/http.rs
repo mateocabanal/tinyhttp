@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use std::{fs::File, io::Read, io::Write};
+use std::{fs::File, io::Read};
 
 use crate::{
     config::{Config, HttpListener},
