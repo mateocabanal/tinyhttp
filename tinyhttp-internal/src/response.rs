@@ -14,6 +14,7 @@ pub struct Response {
     pub body: Option<Vec<u8>>,
     pub mime: Option<String>,
     pub http2: bool,
+    pub(crate) manual_override: bool,
 }
 
 impl Default for Response {
@@ -84,6 +85,18 @@ impl Response {
             body: None,
             mime: Some(String::from("HTTP/1.1 200 OK")),
             http2: false,
+            manual_override: false,
+        }
+    }
+
+    pub fn empty() -> Response {
+        Response {
+            headers: HashMap::new(),
+            status_line: String::new(),
+            body: None,
+            mime: None,
+            manual_override: true,
+            http2: false,
         }
     }
 
@@ -112,15 +125,15 @@ impl Response {
     }
 
     #[cfg(not(feature = "async"))]
-    pub(crate) fn send<P: Read + Write>(&self, sock: &mut P) {
+    pub fn send<P: Read + Write>(self, sock: &mut P) {
         let line_bytes = self.status_line.as_bytes();
         #[cfg(feature = "log")]
         log::trace!("res status line: {:#?}", self.status_line);
 
         let mut header_bytes: Vec<u8> = self
             .headers
-            .iter()
-            .flat_map(|(i, j)| [i.as_bytes(), j.as_bytes()].concat())
+            .into_iter()
+            .flat_map(|(i, j)| [(i + ": ").as_bytes(), (j + "\r\n").as_bytes()].concat())
             .collect();
 
         header_bytes.extend(b"\r\n");

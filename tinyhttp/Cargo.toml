@@ -1,6 +1,6 @@
 [package]
 name = "tinyhttp"
-version = "0.4.0"
+version = "0.5.0-b1"
 edition = "2021"
 authors = ["Mateo Cabanal <mateo200525@gmail.com>"]
 license = "GPL-2.0-or-later"
@@ -26,8 +26,8 @@ name = "async"
 required-features = ["async"]
 
 [dependencies]
-tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.4.0", default-features = false }
-tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.4.0" }
+tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.5.0-b1", default-features = false }
+tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.5.0-b1" }
 
 [features]
 default = ["ssl", "sys", "log"]

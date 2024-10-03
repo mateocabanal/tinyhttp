@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::TcpStream,
     ops::Deref,
     sync::{Arc, OnceLock},
 };
@@ -47,7 +48,7 @@ pub enum Method {
 }
 
 pub trait ToResponse: DynClone + Sync + Send {
-    fn to_res(&self, res: Request) -> Response;
+    fn to_res(&self, res: Request, sock: &mut TcpStream) -> Response;
 }
 
 pub trait Route: DynClone + Sync + Send + ToResponse {

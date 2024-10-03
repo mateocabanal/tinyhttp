@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     io::{self, BufRead, BufReader},
+    net::TcpStream,
     path::Path,
     sync::Arc,
 };
@@ -28,23 +29,7 @@ pub fn start_http(http: HttpListener, config: Config) {
         let mut conn = stream.unwrap();
 
         let config = arc_config.clone();
-        if http.config.ssl && cfg!(feature = "ssl") {
-            #[cfg(feature = "ssl")]
-            let acpt = http.ssl_acpt.clone().unwrap();
-            #[cfg(feature = "ssl")]
-            http.pool.execute(move || match acpt.accept(conn) {
-                Ok(mut s) => {
-                    #[cfg(feature = "log")]
-                    log::trace!("parse_request() called");
-
-                    parse_request(&mut s, config);
-                }
-                Err(s) => {
-                    #[cfg(feature = "log")]
-                    log::error!("{}", s);
-                }
-            });
-        } else if http.use_pool {
+        if http.use_pool {
             http.pool.execute(move || {
                 #[cfg(feature = "log")]
                 log::trace!("parse_request() called");
@@ -138,7 +123,7 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
     ))
 }
 
-fn build_res(mut req: Request, config: &Config) -> Response {
+fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Response {
     let status_line = req.get_status_line();
     #[cfg(feature = "log")]
     log::trace!("build_res -> req_path: {}", status_line[1]);
@@ -168,7 +153,7 @@ fn build_res(mut req: Request, config: &Config) -> Response {
                         .mime("text/plain")
                 }*/
 
-                route.to_res(req)
+                route.to_res(req, sock)
             }
 
             None => match config.get_mount() {
@@ -241,7 +226,7 @@ fn build_res(mut req: Request, config: &Config) -> Response {
                     req.set_wildcard(Some(split.into()));
                 };
 
-                route.to_res(req)
+                route.to_res(req, sock)
             }
 
             None => Response::new()
@@ -257,7 +242,7 @@ fn build_res(mut req: Request, config: &Config) -> Response {
     }
 }
 
-pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
+pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
     let request = build_and_parse_req(conn);
 
     if let Err(e) = request {
@@ -299,7 +284,11 @@ pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
         false
     };
 
-    let mut response = build_res(request, &config);
+    let mut response = build_res(request, &config, conn);
+    if response.manual_override {
+        conn.shutdown(std::net::Shutdown::Both).unwrap();
+        return;
+    }
 
     let mime = response.mime.as_ref().unwrap();
 
@@ -321,13 +310,10 @@ pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
     }
 
     response.headers.extend([
+        ("Content-Type".to_string(), inferred_mime.to_owned()),
         (
-            "Content-Type: ".to_string(),
-            inferred_mime.to_owned() + "\r\n",
-        ),
-        (
-            "tinyhttp: ".to_string(),
-            env!("CARGO_PKG_VERSION").to_string() + "\r\n",
+            "tinyhttp".to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
         ),
     ]);
 
@@ -342,7 +328,7 @@ pub fn parse_request<P: Read + Write>(conn: &mut P, config: Arc<Config>) {
             response.body = Some(writer.finish().unwrap());
             response
                 .headers
-                .insert("Content-Encoding: ".to_string(), "gzip\r\n".to_string());
+                .insert("Content-Encoding".to_string(), "gzip".to_string());
         }
     }
 

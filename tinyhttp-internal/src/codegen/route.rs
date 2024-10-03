@@ -4,6 +4,7 @@ use crate::response::Response;
 
 #[cfg(test)]
 use std::any::Any;
+use std::net::TcpStream;
 
 #[derive(Clone, Debug)]
 pub struct BasicGetRoute {
@@ -34,7 +35,7 @@ impl Default for BasicGetRoute {
 }
 
 impl ToResponse for BasicGetRoute {
-    fn to_res(&self, _res: Request) -> Response {
+    fn to_res(&self, _res: Request, _sock: &mut TcpStream) -> Response {
         self.get_body.unwrap()()
     }
 }
@@ -117,7 +118,7 @@ impl Default for GetRouteWithReq {
 }
 
 impl ToResponse for GetRouteWithReq {
-    fn to_res(&self, res: Request) -> Response {
+    fn to_res(&self, res: Request, _sock: &mut TcpStream) -> Response {
         Response::new()
             .body(self.get_body().unwrap()(res))
             .status_line("HTTP/1.1 200 OK\r\n")
@@ -175,7 +176,7 @@ pub struct GetRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
-    get_body: Option<fn(&mut Request) -> Response>,
+    get_body: Option<fn(&mut Request, &mut TcpStream) -> Response>,
 }
 
 impl Default for GetRouteWithReqAndRes {
@@ -205,19 +206,19 @@ impl GetRouteWithReqAndRes {
         self.wildcard = Some(wildcard);
         self
     }
-    pub fn set_body(mut self, body: fn(&'_ mut Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&'_ mut Request, &'_ mut TcpStream) -> Response) -> Self {
         self.get_body = Some(body);
         self
     }
 
-    pub fn get_body(&self) -> Option<fn(&'_ mut Request) -> Response> {
+    pub fn get_body(&self) -> Option<fn(&'_ mut Request, &'_ mut TcpStream) -> Response> {
         self.get_body
     }
 }
 
 impl ToResponse for GetRouteWithReqAndRes {
-    fn to_res(&self, mut req: Request) -> Response {
-        self.get_body().unwrap()(&mut req)
+    fn to_res(&self, mut req: Request, sock: &mut TcpStream) -> Response {
+        self.get_body().unwrap()(&mut req, sock)
     }
 }
 
@@ -306,7 +307,7 @@ impl BasicPostRoute {
 }
 
 impl ToResponse for BasicPostRoute {
-    fn to_res(&self, _req: Request) -> Response {
+    fn to_res(&self, _req: Request, _sock: &mut TcpStream) -> Response {
         self.post_body.unwrap()()
     }
 }
@@ -371,7 +372,7 @@ impl PostRouteWithReq {
     }
 }
 impl ToResponse for PostRouteWithReq {
-    fn to_res(&self, req: Request) -> Response {
+    fn to_res(&self, req: Request, _sock: &mut TcpStream) -> Response {
         Response::new()
             .body(self.post_body.unwrap()(req))
             .mime("text/plain")
@@ -403,7 +404,7 @@ pub struct PostRouteWithReqAndRes {
     path: Option<&'static str>,
     method: Method,
     wildcard: Option<String>,
-    post_body: Option<fn(&mut Request) -> Response>,
+    post_body: Option<fn(&mut Request, &mut TcpStream) -> Response>,
 }
 
 unsafe impl Sync for PostRouteWithReqAndRes {}
@@ -437,14 +438,14 @@ impl PostRouteWithReqAndRes {
         self
     }
 
-    pub fn set_body(mut self, body: fn(&'_ mut Request) -> Response) -> Self {
+    pub fn set_body(mut self, body: fn(&'_ mut Request, &'_ mut TcpStream) -> Response) -> Self {
         self.post_body = Some(body);
         self
     }
 }
 impl ToResponse for PostRouteWithReqAndRes {
-    fn to_res(&self, mut req: Request) -> Response {
-        self.post_body.unwrap()(&mut req)
+    fn to_res(&self, mut req: Request, sock: &mut TcpStream) -> Response {
+        self.post_body.unwrap()(&mut req, sock)
     }
 }
 

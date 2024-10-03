@@ -74,16 +74,18 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     //            get_route = get_route.set_body(body);
     //        }
     let new_get_body = if is_body_args {
-        let first_arg_name = fn_args.first().unwrap();
+        let mut fn_args_iter = fn_args.iter();
+        let first_arg_name = fn_args_iter.next().unwrap();
         let arg_type = match first_arg_name {
             syn::FnArg::Typed(i) => i.to_owned(),
             _ => todo!(),
         };
+
         quote! {
             let mut get_route = GetRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body<'b>(try_from_req: &'b mut Request) -> Response {
+            fn body<'b>(try_from_req: &'b mut Request, _sock: &'b mut std::net::TcpStream) -> Response {
                 let #arg_type = try_from_req.into();
                 #body.into()
             }
@@ -186,10 +188,11 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         //
         //        let arg_name_type = &arg_name_type.path.segments.first().unwrap().ident;
         quote! {
+
             let mut post_route = PostRouteWithReqAndRes::new()
                 .set_path(#path.into());
 
-            fn body<'b>(try_from_req: &'b mut Request) -> Response {
+            fn body<'b>(try_from_req: &'b mut Request, _sock: &'b mut std::net::TcpStream) -> Response {
                 let #arg_type = try_from_req.into();
                 #body.into()
             }
