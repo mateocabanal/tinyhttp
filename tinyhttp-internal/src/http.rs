@@ -323,6 +323,7 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
     #[cfg(feature = "sys")]
     {
         if _comp {
+            use std::io::Write;
             let mut writer = GzEncoder::new(Vec::new(), Compression::default());
             writer.write_all(response.body.as_ref().unwrap()).unwrap();
             response.body = Some(writer.finish().unwrap());
