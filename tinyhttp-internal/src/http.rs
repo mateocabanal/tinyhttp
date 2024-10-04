@@ -110,7 +110,10 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
 
     let mut raw_body = vec![0; body_len];
 
-    buf_reader.read_exact(&mut raw_body).unwrap();
+    let mut count = 0;
+    while count < body_len {
+        count += buf_reader.read(&mut raw_body).unwrap();
+    }
 
     Ok(Request::new(
         raw_body,
