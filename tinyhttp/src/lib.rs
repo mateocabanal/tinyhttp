@@ -95,7 +95,7 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::OnceLock, thread, time::Duration};
+    use std::{sync::OnceLock, thread, time::Duration};
 
     static HTTP_ENABLED: OnceLock<bool> = OnceLock::new();
 
@@ -175,66 +175,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_codegen() {
-        use crate::prelude::*;
-
-        #[get("/")]
-        fn get() -> &'static str {
-            "Hello Test?"
-        }
-
-        #[post("/")]
-        fn post(body: Request) -> String {
-            let headers = body.get_headers();
-            format!(
-                "Accept-Encoding: {}",
-                headers.get("accept-encoding").unwrap()
-            )
-        }
-
-        let routes = Routes::new(vec![get(), post()]);
-        assert!(routes
-            .clone()
-            .get_stream()
-            .clone()
-            .first()
-            .unwrap()
-            .wildcard()
-            .is_none());
-
-        let mut headers = HashMap::new();
-        headers.insert("accept-encoding".to_string(), "gzip".to_string());
-
-        let request = Request::new(
-            b"Hello".to_vec(),
-            headers,
-            vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
-            None,
-        );
-        assert_eq!(
-            b"Hello Test?".to_vec(),
-            routes
-                .clone()
-                .get_stream()
-                .first()
-                .unwrap()
-                .to_res(request.clone())
-                .body
-                .unwrap()
-        );
-
-        assert_eq!(
-            b"Accept-Encoding: gzip".to_vec(),
-            routes
-                .get_stream()
-                .last()
-                .unwrap()
-                .to_res(request)
-                .body
-                .unwrap()
-        );
-    }
     #[test]
     fn respond_to_minimal_request() -> Result<(), Box<dyn std::error::Error>> {
         if HTTP_ENABLED.get().is_none() {

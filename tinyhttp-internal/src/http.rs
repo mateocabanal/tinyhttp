@@ -109,11 +109,7 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
         .unwrap();
 
     let mut raw_body = vec![0; body_len];
-
-    let mut count = 0;
-    while count < body_len {
-        count += buf_reader.read(&mut raw_body).unwrap();
-    }
+    buf_reader.read_exact(&mut raw_body).unwrap();
 
     Ok(Request::new(
         raw_body,
@@ -146,15 +142,6 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
 
                     req.set_wildcard(Some(split.into()));
                 };
-
-                /*if route.is_ret_res() {
-                    route.get_body_with_res().unwrap()(req_new.to_owned())
-                } else {
-                    Response::new()
-                        .status_line("HTTP/1.1 200 OK\r\n")
-                        .body(route.to_body(req_new.to_owned()))
-                        .mime("text/plain")
-                }*/
 
                 route.to_res(req, sock)
             }
