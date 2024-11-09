@@ -1,4 +1,4 @@
-# HTTP SERVER
+<h1 align="center"> tinyhttp </h1>
 
 [![codecov](https://codecov.io/gh/mateocabanal/tinyhttp/branch/main/graph/badge.svg?token=LH8YSHNKRF)](https://codecov.io/gh/mateocabanal/tinyhttp)
 [![Rust](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml/badge.svg)](https://github.com/mateocabanal/tinyhttp/actions/workflows/rust.yml)
