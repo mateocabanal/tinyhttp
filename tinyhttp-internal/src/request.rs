@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, mem};
+use std::{fmt::Display, mem};
 
 #[derive(Clone, Debug, Default)]
 pub struct Wildcard<T: Display> {
@@ -24,7 +24,7 @@ impl<T: Display> Wildcard<T> {
 /// body is used when the body of the request is not a String
 #[derive(Clone, Debug, Default)]
 pub struct Request {
-    raw_headers: HashMap<String, String>,
+    raw_headers: HeaderMap,
     status_line: Vec<String>,
     body: Vec<u8>,
     wildcard: Option<String>,
@@ -40,7 +40,7 @@ pub enum BodyType {
 impl Request {
     pub fn new(
         body: Vec<u8>,
-        raw_headers: HashMap<String, String>,
+        raw_headers: HeaderMap,
         status_line: Vec<String>,
         wildcard: Option<String>,
     ) -> Request {
@@ -65,15 +65,11 @@ impl Request {
 
     /// Get request body as a string
     pub fn get_parsed_body(&self) -> Option<&str> {
-        if let Ok(s) = std::str::from_utf8(&self.body) {
-            Some(s)
-        } else {
-            None
-        }
+        std::str::from_utf8(&self.body).ok()
     }
 
     /// Get request headers in a HashMap
-    pub fn get_headers(&self) -> &HashMap<String, String> {
+    pub fn get_headers(&self) -> &HeaderMap {
         #[cfg(feature = "log")]
         log::trace!("Headers: {:#?}", self.raw_headers);
 
@@ -93,7 +89,8 @@ impl Request {
         self.is_http2
     }
 
-    pub fn set_http2(mut self, w: bool) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn set_http2(mut self, w: bool) -> Self {
         self.is_http2 = w;
         self
     }
@@ -115,7 +112,8 @@ impl<'a> From<&'a mut Request> for Wildcard<&'a str> {
 //    }
 //}
 
-impl<'a> From<&'a mut Request> for &'a HashMap<String, String> {
+// TODO: Add docs here
+impl<'a> From<&'a mut Request> for &'a HeaderMap {
     fn from(value: &'a mut Request) -> Self {
         value.get_headers()
     }
@@ -139,6 +137,8 @@ impl From<&mut Request> for Request {
     }
 }
 use thiserror::Error;
+
+use crate::headers::HeaderMap;
 
 #[derive(Error, Debug)]
 pub enum RequestError {

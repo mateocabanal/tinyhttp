@@ -10,12 +10,12 @@ version = "0.5.0"
 
 [dependencies]
 mime_guess = "2.0.4"
-openssl = { version = "0.10", optional = true }
 dyn-clone = "1.0.11"
 infer = "0.15.0"
 num_cpus = "1.16.0"
 rusty_pool = "0.7.0"
 thiserror = "1"
+unicase = "2.8.1"
 
 [dependencies.flate2]
 features = ["miniz-sys"]
@@ -34,11 +34,9 @@ optional = true
 
 [features]
 default = ["sys", "log"]
-openssl_vendor = ["ssl", "openssl?/vendored"]
 middleware = []
 async = ["dep:tokio"]
-ssl = ["dep:openssl"]
-sys = ["ssl", "dep:flate2"]
+sys = ["dep:flate2"]
 log = ["dep:log"]
 
 [dev-dependencies]

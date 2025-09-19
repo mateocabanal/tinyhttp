@@ -2,15 +2,12 @@ use std::{
     collections::HashMap,
     net::TcpStream,
     ops::Deref,
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
-use crate::request::Request;
+use crate::{middleware::MiddlewareResponse, request::Request};
 pub use dyn_clone::DynClone;
 use std::fmt::Debug;
-
-#[cfg(feature = "ssl")]
-use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
 use crate::response::Response;
 
@@ -22,18 +19,13 @@ use std::net::{Incoming, TcpListener};
 #[cfg(not(feature = "async"))]
 use crate::http::start_http;
 
-#[cfg(feature = "async")]
-use tokio::net::TcpListener;
-
-#[cfg(feature = "async")]
-use crate::async_http::start_http;
-
-use std::sync::Mutex;
 
 #[cfg(test)]
 use std::any::Any;
 
 type RouteVec = Vec<Box<dyn Route>>;
+
+type MiddlewareFn = fn(&mut Request) -> MiddlewareResponse;
 
 pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
     OnceLock::new();
@@ -72,8 +64,6 @@ pub struct HttpListener {
     pub config: Config,
     pub pool: ThreadPool,
     pub use_pool: bool,
-    #[cfg(feature = "ssl")]
-    pub ssl_acpt: Option<Arc<SslAcceptor>>,
 }
 
 impl HttpListener {
@@ -81,29 +71,11 @@ impl HttpListener {
         #[cfg(feature = "log")]
         log::debug!("Using {} threads", num_cpus::get());
 
-        if config.ssl {
-            #[cfg(feature = "ssl")]
-            let ssl_acpt = Some(build_https(
-                config.ssl_chain.clone().unwrap(),
-                config.ssl_priv.clone().unwrap(),
-            ));
-            HttpListener {
-                socket: socket.into(),
-                config,
-                pool: ThreadPool::default(),
-                #[cfg(feature = "ssl")]
-                ssl_acpt,
-                use_pool: true,
-            }
-        } else {
-            HttpListener {
-                socket: socket.into(),
-                config,
-                pool: ThreadPool::default(),
-                #[cfg(feature = "ssl")]
-                ssl_acpt: None,
-                use_pool: true,
-            }
+        HttpListener {
+            socket: socket.into(),
+            config,
+            pool: ThreadPool::default(),
+            use_pool: true,
         }
     }
 
@@ -123,11 +95,6 @@ impl HttpListener {
     pub fn start(self) {
         let conf_clone = self.config.clone();
         start_http(self, conf_clone);
-    }
-
-    #[cfg(feature = "async")]
-    pub async fn start(self) {
-        start_http(self).await;
     }
 
     #[cfg(not(feature = "async"))]
@@ -162,12 +129,10 @@ pub struct Config {
     ssl_chain: Option<String>,
     ssl_priv: Option<String>,
     headers: Option<HashMap<String, String>>,
-    br: bool,
     gzip: bool,
     spa: bool,
     http2: bool,
-    response_middleware: Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>>,
-    request_middleware: Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>>,
+    middleware: Option<Vec<MiddlewareFn>>,
 }
 
 impl Default for Config {
@@ -212,11 +177,9 @@ impl Config {
             ssl_priv: None,
             headers: None,
             gzip: false,
-            br: false,
             spa: false,
             http2: false,
-            request_middleware: None,
-            response_middleware: None,
+            middleware: None,
         }
     }
 
@@ -333,13 +296,6 @@ impl Config {
         self
     }
 
-    /// DOES NOT WORK!
-    /// Enables brotli compression
-    pub fn br(mut self, res: bool) -> Self {
-        self.br = res;
-        self
-    }
-
     pub fn spa(mut self, res: bool) -> Self {
         self.spa = res;
         self
@@ -356,27 +312,17 @@ impl Config {
         self
     }
 
-    pub fn request_middleware<F: FnMut(&mut Request) + Send + Sync + 'static>(
-        mut self,
-        middleware_fn: F,
-    ) -> Self {
-        self.request_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
+    pub fn middleware(mut self, middleware: Vec<MiddlewareFn>) -> Self {
+        self.middleware = Some(middleware);
         self
     }
 
-    pub fn response_middleware<F: FnMut(&mut Response) + Send + Sync + 'static>(
-        mut self,
-        middleware_fn: F,
-    ) -> Self {
-        self.response_middleware = Some(Arc::new(Mutex::new(middleware_fn)));
-        self
+    pub fn get_middleware(&self) -> Option<&[MiddlewareFn]> {
+        self.middleware.as_deref()
     }
 
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
-    }
-    pub fn get_br(&self) -> bool {
-        self.br
     }
     pub fn get_gzip(&self) -> bool {
         self.gzip
@@ -449,37 +395,4 @@ impl Config {
     pub fn get_spa(&self) -> bool {
         self.spa
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn get_request_middleware(
-        &self,
-    ) -> Option<Arc<Mutex<dyn FnMut(&mut Request) + Send + Sync>>> {
-        if let Some(s) = &self.request_middleware {
-            Some(Arc::clone(s))
-        } else {
-            None
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn get_response_middleware(
-        &self,
-    ) -> Option<Arc<Mutex<dyn FnMut(&mut Response) + Send + Sync>>> {
-        if let Some(s) = &self.response_middleware {
-            Some(Arc::clone(s))
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(feature = "ssl")]
-pub fn build_https(chain: String, private: String) -> Arc<SslAcceptor> {
-    let mut acceptor = SslAcceptor::mozilla_modern_v5(SslMethod::tls()).unwrap();
-    acceptor.set_certificate_chain_file(chain).unwrap();
-    acceptor
-        .set_private_key_file(private, SslFiletype::PEM)
-        .unwrap();
-    acceptor.check_private_key().unwrap();
-    Arc::new(acceptor.build())
 }

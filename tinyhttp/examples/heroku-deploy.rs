@@ -25,13 +25,13 @@ fn post_without_args() -> &'static str {
 #[get("/wildcard/:")]
 fn get_wildcard(req: Request) -> String {
     let wildcard = req.get_wildcard().unwrap();
-    format!("Hello, {}\n", wildcard)
+    format!("Hello, {wildcard}\n")
 }
 
 #[post("/wildcard/:")]
 fn post_wildcard(req: Request) -> String {
     let wildcard = req.get_wildcard().unwrap();
-    format!("Hello, {}\n", wildcard)
+    format!("Hello, {wildcard}\n")
 }
 
 #[post("/test/returning/vec")]

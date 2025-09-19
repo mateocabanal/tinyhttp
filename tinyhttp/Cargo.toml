@@ -30,10 +30,8 @@ tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.5.0", default-
 tinyhttp-codegen = { path = "../tinyhttp-codegen", version = "0.5.0" }
 
 [features]
-default = ["ssl", "sys", "log"]
+default = [ "sys", "log"]
 async = ["tinyhttp-internal/async"]
 middleware = ["tinyhttp-internal/middleware"]
-openssl_vendor = ["tinyhttp-internal/openssl_vendor"]
-ssl = ["tinyhttp-internal/ssl"]
 sys = ["tinyhttp-internal/sys"]
 log = ["tinyhttp-internal/log"]

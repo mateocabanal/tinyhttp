@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::io::{Read, Write};
 
+use std::net::TcpListener;
 use std::sync::Arc;
 use tinyhttp::prelude::*;
 use tinyhttp_internal::http::parse_request;
@@ -58,14 +59,19 @@ fn get() -> &'static str {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let http = "GET /helloworld HTTP/1.1\r\nAccept-Content: text/plain\r\n\r\n".as_bytes();
+    let socket = TcpListener::bind(":::8001").unwrap();
 
-    let conf = Arc::new(Config::new().routes(Routes::new(vec![get()])));
-    let buffer = Vec::with_capacity(16384);
-    let mut read_write = RwWrapper::new(http, buffer);
+    let conf = Config::new().routes(Routes::new(vec![get()]));
+    let http = HttpListener::new(socket, conf);
+    std::thread::spawn(move || {
+        http.start();
+    });
+
     c.bench_function("Parse http request", move |b| {
         b.iter(|| {
-            parse_request(&mut read_write, conf.clone());
+            minreq::get("http://localhost:8001/helloworld")
+                .send()
+                .unwrap();
         })
     });
 }

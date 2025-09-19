@@ -55,7 +55,7 @@ impl From<()> for Response {
         Response::new()
             .body(vec![])
             .mime("text/plain")
-            .status_line("HTTP/1.1 403 Forbidden")
+            .status_line("HTTP/1.1 404 Not Found")
     }
 }
 
@@ -81,9 +81,9 @@ impl Response {
     pub fn new() -> Response {
         Response {
             headers: HashMap::new(),
-            status_line: String::new(),
+            mime: None,
             body: None,
-            mime: Some(String::from("HTTP/1.1 200 OK")),
+            status_line: String::from("HTTP/1.1 200 OK"),
             http2: false,
             manual_override: false,
         }
@@ -153,7 +153,7 @@ impl Response {
         let full_req: &[u8] = &[
             line_bytes,
             header_bytes.as_slice(),
-            self.body.as_ref().unwrap(),
+            self.body.as_ref().unwrap_or(&vec![]),
         ]
         .concat();
 

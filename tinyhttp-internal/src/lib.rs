@@ -3,6 +3,8 @@
 
 pub mod codegen;
 pub mod config;
+pub mod headers;
+pub mod middleware;
 pub mod request;
 pub mod response;
 
@@ -14,13 +16,14 @@ pub mod async_http;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+
+    use crate::headers::HeaderMap;
 
     #[test]
     fn build_request() {
         use crate::request::Request;
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/plain".to_string());
+        let mut headers = HeaderMap::new();
+        headers.set("content-type", "text/plain");
 
         let request = Request::new(
             b"Hello, World!".to_vec(),

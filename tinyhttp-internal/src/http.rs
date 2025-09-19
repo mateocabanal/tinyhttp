@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     io::{self, BufRead, BufReader},
     net::TcpStream,
     path::Path,
@@ -10,12 +9,14 @@ use std::{fs::File, io::Read};
 
 use crate::{
     config::{Config, HttpListener},
+    headers::HeaderMap,
     request::{Request, RequestError},
     response::Response,
 };
 
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
+use unicase::Ascii;
 
 pub fn start_http(http: HttpListener, config: Config) {
     #[cfg(feature = "log")]
@@ -42,8 +43,6 @@ pub fn start_http(http: HttpListener, config: Config) {
 
             parse_request(&mut conn, config);
         }
-
-        //conn.write(b"HTTP/1.1 200 OK\r\n").unwrap();
     }
 }
 
@@ -70,7 +69,7 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
     buf_reader.consume(header_end_idx + 4); // Add 4 bytes since header_end_idx does not count
                                             // \r\n\r\n
 
-    let mut headers = HashMap::new();
+    let mut headers = HeaderMap::new();
     let mut headers_index = 0;
 
     let mut headers_buf_iter = headers_buf.windows(2).enumerate();
@@ -83,9 +82,7 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
         #[cfg(feature = "log")]
         log::trace!("header index: {}", header_index);
 
-        let header = std::str::from_utf8(&headers_buf[headers_index..header_index])
-            .unwrap()
-            .to_lowercase();
+        let header = std::str::from_utf8(&headers_buf[headers_index..header_index]).unwrap();
 
         if header.is_empty() {
             break;
@@ -96,17 +93,16 @@ fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
         headers_index = header_index + 2;
 
         let mut colon_split = header.splitn(2, ':');
-        headers.insert(
-            colon_split.next().unwrap().to_string(),
-            colon_split.next().unwrap().trim().to_string(),
+        headers.set(
+            colon_split.next().unwrap(),
+            colon_split.next().unwrap().trim(),
         );
     }
 
     let body_len = headers
-        .get("content-length")
-        .unwrap_or(&String::from("0"))
-        .parse::<usize>()
-        .unwrap();
+        .get(Ascii::new("Content-Length".to_string()))
+        .map(|str| str.parse::<usize>().unwrap())
+        .unwrap_or(0usize);
 
     let mut raw_body = vec![0; body_len];
     buf_reader.read_exact(&mut raw_body).unwrap();
@@ -235,32 +231,31 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
 pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
     let request = build_and_parse_req(conn);
 
-    if let Err(e) = request {
-        let specific_err = match e {
-            RequestError::StatusLineErr => b"failed to parse status line".to_vec(),
-            RequestError::HeadersErr => b"failed to parse headers".to_vec(),
-        };
-        Response::new()
-            .mime("text/plain")
-            .body(specific_err)
-            .send(conn);
+    let request = match request {
+        Ok(request) => request,
+        Err(e) => {
+            let specific_err = match e {
+                RequestError::StatusLineErr => b"failed to parse status line".to_vec(),
+                RequestError::HeadersErr => b"failed to parse headers".to_vec(),
+            };
+            Response::new()
+                .mime("text/plain")
+                .body(specific_err)
+                .send(conn);
 
-        return;
-    }
+            return;
+        }
+    };
 
-    // NOTE:
-    // Err has been handled above
-    // Therefore, request should always be Ok
-
-    let request = unsafe { request.unwrap_unchecked() };
     /*#[cfg(feature = "middleware")]
     if let Some(req_middleware) = config.get_request_middleware() {
         req_middleware.lock().unwrap()(&mut request);
     };*/
+
     let req_headers = request.get_headers();
     let _comp = if config.get_gzip() {
-        if req_headers.contains_key("accept-encoding") {
-            let tmp_str = req_headers.get("accept-encoding").unwrap();
+        if req_headers.contains("Accept-Encoding") {
+            let tmp_str = req_headers.get("Accept-Encoding").unwrap();
             let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
 
             #[cfg(feature = "log")]
@@ -280,13 +275,24 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
         return;
     }
 
-    let mime = response.mime.as_ref().unwrap();
+    match response.mime {
+        Some(ref t) => {
+            response
+                .headers
+                .insert("Content-Type".to_string(), t.to_owned());
+        }
+        None => {
+            if let Some(body) = &response.body {
+                let mime = infer::get(body)
+                    .map(|mime| mime.mime_type())
+                    .unwrap_or("text/plain");
 
-    let inferred_mime = if let Some(mime_inferred) = infer::get(response.body.as_ref().unwrap()) {
-        mime_inferred.mime_type()
-    } else {
-        mime.as_str()
-    };
+                response
+                    .headers
+                    .insert("Content-Type".to_string(), mime.to_string());
+            }
+        }
+    }
 
     if let Some(config_headers) = config.get_headers() {
         response.headers.extend(
@@ -294,18 +300,12 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
                 .iter()
                 .map(|(i, j)| (i.to_owned(), j.to_owned())),
         );
-        //        for (i, j) in config_headers.iter() {
-        //            res_brw.headers.insert(i.to_string(), j.to_string());
-        //        }
     }
 
-    response.headers.extend([
-        ("Content-Type".to_string(), inferred_mime.to_owned()),
-        (
-            "tinyhttp".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-        ),
-    ]);
+    response.headers.extend([(
+        "tinyhttp".to_string(),
+        env!("CARGO_PKG_VERSION").to_string(),
+    )]);
 
     // Only check for 'accept-encoding' header
     // when compression is enabled
