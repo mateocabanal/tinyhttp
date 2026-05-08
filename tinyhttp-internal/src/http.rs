@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use std::{fs::File, io::Read};
+use std::io::Read;
 
 use crate::{
     config::{Config, HttpListener},
@@ -341,12 +341,5 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
 }
 
 fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    fn inner(path: &Path) -> io::Result<Vec<u8>> {
-        let file = File::open(path).unwrap();
-        let mut content: Vec<u8> = Vec::new();
-        let mut reader = BufReader::new(file);
-        reader.read_to_end(&mut content).unwrap();
-        Ok(content)
-    }
-    inner(path.as_ref())
+    std::fs::read(path)
 }
