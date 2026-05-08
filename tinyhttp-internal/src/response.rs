@@ -126,41 +126,29 @@ impl Response {
 
     #[cfg(not(feature = "async"))]
     pub fn send<P: Read + Write>(self, sock: &mut P) {
-        let line_bytes = self.status_line.as_bytes();
         #[cfg(feature = "log")]
         log::trace!("res status line: {:#?}", self.status_line);
 
-        let mut header_bytes: Vec<u8> = self
-            .headers
-            .into_iter()
-            .flat_map(|(i, j)| [(i + ": ").as_bytes(), (j + "\r\n").as_bytes()].concat())
-            .collect();
+        sock.write_all(self.status_line.as_bytes()).unwrap();
 
-        header_bytes.extend(b"\r\n");
+        for (key, value) in self.headers {
+            sock.write_all(key.as_bytes()).unwrap();
+            sock.write_all(b": ").unwrap();
+            sock.write_all(value.as_bytes()).unwrap();
+            sock.write_all(b"\r\n").unwrap();
+        }
 
-        #[cfg(all(feature = "log", debug_assertions))]
-        {
-            log::trace!(
-                "HEADER AS STR: {}",
-                String::from_utf8(header_bytes.clone()).unwrap()
-            );
-            log::trace!(
-                "STATUS LINE AS STR: {}",
-                std::str::from_utf8(line_bytes).unwrap()
-            );
-        };
+        sock.write_all(b"\r\n").unwrap();
 
-        let full_req: &[u8] = &[
-            line_bytes,
-            header_bytes.as_slice(),
-            self.body.as_ref().unwrap_or(&vec![]),
-        ]
-        .concat();
+        if let Some(body) = self.body {
+            #[cfg(feature = "log")]
+            log::trace!("size of response body: {}", body.len());
 
-        #[cfg(feature = "log")]
-        log::trace!("size of response: {}", full_req.len());
-
-        sock.write_all(full_req).unwrap();
+            sock.write_all(&body).unwrap();
+        } else {
+            #[cfg(feature = "log")]
+            log::trace!("size of response body: 0");
+        }
     }
 
     #[cfg(feature = "async")]
