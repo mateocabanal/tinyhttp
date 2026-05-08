@@ -253,21 +253,15 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
     };*/
 
     let req_headers = request.get_headers();
-    let _comp = if config.get_gzip() {
-        if req_headers.contains("Accept-Encoding") {
-            let tmp_str = req_headers.get("Accept-Encoding").unwrap();
-            let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
-
-            #[cfg(feature = "log")]
-            log::trace!("{:#?}", &res);
-
-            res.contains(&"gzip")
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let _comp = config.get_gzip()
+        && req_headers
+            .get("Accept-Encoding")
+            .map(|tmp_str| {
+                tmp_str
+                    .split(',')
+                    .any(|encoding| encoding.trim().eq_ignore_ascii_case("gzip"))
+            })
+            .unwrap_or(false);
 
     let mut response = build_res(request, &config, conn);
     if response.manual_override {
