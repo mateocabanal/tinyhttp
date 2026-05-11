@@ -1,10 +1,98 @@
+use std::{net::TcpStream, sync::Arc};
+
 use crate::config::{Method, Route, ToResponse};
 use crate::request::Request;
 use crate::response::Response;
 
 #[cfg(test)]
 use std::any::Any;
-use std::net::TcpStream;
+
+#[derive(Clone, Debug)]
+pub struct CachedRoute {
+    path: Option<&'static str>,
+    method: Method,
+    wildcard: Option<String>,
+    response: Option<Response>,
+    prebuilt: Option<Arc<[u8]>>,
+}
+
+impl Default for CachedRoute {
+    fn default() -> Self {
+        CachedRoute {
+            path: None,
+            method: Method::GET,
+            wildcard: None,
+            response: None,
+            prebuilt: None,
+        }
+    }
+}
+
+impl CachedRoute {
+    pub fn new() -> CachedRoute {
+        Default::default()
+    }
+
+    pub fn set_path(mut self, path: &'static str) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    pub fn set_method(mut self, method: Method) -> Self {
+        self.method = method;
+        self
+    }
+
+    pub fn set_wildcard(mut self, wildcard: String) -> Self {
+        self.wildcard = Some(wildcard);
+        self
+    }
+
+    pub fn set_body(mut self, body: fn() -> Response) -> Self {
+        let response = body();
+        let prebuilt = response.clone().render_cached_bytes();
+        self.response = Some(response);
+        self.prebuilt = Some(Arc::<[u8]>::from(prebuilt));
+        self
+    }
+}
+
+impl ToResponse for CachedRoute {
+    fn to_res(&self, _req: Request, _sock: &mut TcpStream) -> Response {
+        self.response.clone().unwrap()
+    }
+}
+
+impl Route for CachedRoute {
+    fn get_path(&self) -> &str {
+        self.path.unwrap()
+    }
+
+    fn get_method(&self) -> Method {
+        self.method
+    }
+
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Route> {
+        Box::new(self.clone())
+    }
+
+    fn needs_request(&self) -> bool {
+        false
+    }
+
+    fn cached_response(&self) -> Option<&[u8]> {
+        self.prebuilt.as_deref()
+    }
+
+    #[cfg(test)]
+    fn any(&self) -> &dyn Any {
+        self
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct BasicGetRoute {
@@ -85,11 +173,14 @@ impl Route for BasicGetRoute {
     fn get_method(&self) -> Method {
         self.method
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     fn clone_dyn(&self) -> Box<dyn Route> {
         Box::new(self.clone())
+    }
+    fn needs_request(&self) -> bool {
+        false
     }
 
     #[cfg(test)]
@@ -162,8 +253,8 @@ impl Route for GetRouteWithReq {
     fn get_path(&self) -> &str {
         self.path.unwrap()
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {
@@ -232,8 +323,8 @@ impl Route for GetRouteWithReqAndRes {
     fn get_path(&self) -> &str {
         self.path.unwrap()
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {
@@ -319,11 +410,14 @@ impl Route for BasicPostRoute {
     fn get_method(&self) -> Method {
         self.method
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     fn clone_dyn(&self) -> Box<dyn Route> {
         Box::new(self.clone())
+    }
+    fn needs_request(&self) -> bool {
+        false
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {
@@ -390,8 +484,8 @@ impl Route for PostRouteWithReq {
     fn get_path(&self) -> &str {
         self.path.unwrap()
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {
@@ -459,8 +553,8 @@ impl Route for PostRouteWithReqAndRes {
     fn get_path(&self) -> &str {
         self.path.unwrap()
     }
-    fn wildcard(&self) -> Option<String> {
-        self.wildcard.clone()
+    fn wildcard(&self) -> Option<&str> {
+        self.wildcard.as_deref()
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {

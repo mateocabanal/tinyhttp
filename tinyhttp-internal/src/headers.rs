@@ -1,32 +1,61 @@
-use std::collections::HashMap;
-
-use unicase::Ascii;
-
 #[derive(Default, Debug, Clone)]
 pub struct HeaderMap {
-    inner: HashMap<Ascii<String>, Ascii<String>>,
+    inner: Vec<(String, String)>,
 }
 
 impl HeaderMap {
     pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            inner: HashMap::new(),
+            inner: Vec::with_capacity(capacity),
         }
     }
 
-    pub fn get(&self, key: impl ToString) -> Option<&str> {
+    pub fn get(&self, key: &str) -> Option<&str> {
         self.inner
-            .get(&Ascii::new(key.to_string()))
-            .map(|u| u.as_str())
+            .iter()
+            .rev()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value.as_str())
     }
 
-    pub fn set(&mut self, key: impl ToString, val: impl ToString) {
-        let _ = self
+    pub fn set(&mut self, key: impl AsRef<str>, val: impl AsRef<str>) {
+        let key = key.as_ref().trim();
+        let val = val.as_ref().trim();
+
+        if let Some((_, value)) = self
             .inner
-            .insert(Ascii::new(key.to_string()), Ascii::new(val.to_string()));
+            .iter_mut()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+        {
+            value.clear();
+            value.push_str(val);
+            return;
+        }
+
+        self.inner.push((key.to_string(), val.to_string()));
     }
 
-    pub fn contains(&self, key: impl ToString) -> bool {
-        self.inner.contains_key(&Ascii::new(key.to_string()))
+    pub fn contains(&self, key: &str) -> bool {
+        self.inner
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case(key))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.inner
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 }

@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    net::TcpStream,
-    ops::Deref,
-    sync::OnceLock,
-};
+use std::{collections::HashMap, net::TcpStream, ops::Deref, sync::OnceLock};
 
 use crate::{middleware::MiddlewareResponse, request::Request};
 pub use dyn_clone::DynClone;
@@ -19,7 +14,6 @@ use std::net::{Incoming, TcpListener};
 #[cfg(not(feature = "async"))]
 use crate::http::start_http;
 
-
 #[cfg(test)]
 use std::any::Any;
 
@@ -33,10 +27,27 @@ pub static PRE_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + S
 pub static POST_MIDDLEWARE_CONST: OnceLock<Box<dyn FnMut(&mut Request) + Send + Sync>> =
     OnceLock::new();
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Method {
     GET,
     POST,
+}
+
+impl Method {
+    pub fn from_str(method: &str) -> Method {
+        match method {
+            "GET" => Method::GET,
+            "POST" => Method::POST,
+            _ => Method::GET,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Method::GET => "GET",
+            Method::POST => "POST",
+        }
+    }
 }
 
 pub trait ToResponse: DynClone + Sync + Send {
@@ -46,8 +57,16 @@ pub trait ToResponse: DynClone + Sync + Send {
 pub trait Route: DynClone + Sync + Send + ToResponse {
     fn get_path(&self) -> &str;
     fn get_method(&self) -> Method;
-    fn wildcard(&self) -> Option<String>;
+    fn wildcard(&self) -> Option<&str>;
     fn clone_dyn(&self) -> Box<dyn Route>;
+
+    fn needs_request(&self) -> bool {
+        true
+    }
+
+    fn cached_response(&self) -> Option<&[u8]> {
+        None
+    }
 
     #[cfg(test)]
     fn any(&self) -> &dyn Any;
@@ -142,28 +161,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Generates default settings (which don't work by itself)
-    ///
-    /// Chain with mount_point or routes
-    ///
-    /// ### Example:
-    /// ```ignore
-    /// use tinyhttp::prelude::*;
-    ///
-    /// #[get("/test")]
-    /// fn get_test() -> String {
-    ///   String::from("Hello, there!\n")
-    /// }
-    ///
-    /// let routes = Routes::new(vec![get_test()]);
-    /// let routes_config = Config::new().routes(routes);
-    /// /// or
-    /// let mount_config = Config::new().mount_point(".");
-    /// ```
-
     pub fn new() -> Config {
-        //assert!(routes.len() > 0);
-
         #[cfg(feature = "log")]
         log::info!("tinyhttp version: {}", env!("CARGO_PKG_VERSION"));
 
@@ -183,50 +181,15 @@ impl Config {
         }
     }
 
-    /// A mount point that will be searched when a request isn't defined with a get or post route
-    ///
-    /// ### Example:
-    /// ```ignore
-    /// let config = Config::new().mount_point(".")
-    /// /// if index.html exists in current directory, it will be returned if "/" or "/index.html" is requested.
-    /// ```
-
     pub fn mount_point<P: Into<String>>(mut self, path: P) -> Self {
         self.mount_point = Some(path.into());
         self
     }
 
-    /// Add routes with a Route member
-    ///
-    /// ### Example:
-    /// ```ignore
-    /// use tinyhttp::prelude::*;
-    ///
-    ///
-    /// #[get("/test")]
-    /// fn get_test() -> &'static str {
-    ///   "Hello, World!"
-    /// }
-    ///
-    /// #[post("/test")]
-    /// fn post_test() -> Vec<u8> {
-    ///   b"Hello, Post!".to_vec()
-    /// }
-    ///
-    /// fn main() {
-    ///   let socket = TcpListener::new(":::80").unwrap();
-    ///   let routes = Routes::new(vec![get_test(), post_test()]);
-    ///   let config = Config::new().routes(routes);
-    ///   let http = HttpListener::new(socket, config);
-    ///
-    ///   http.start();
-    /// }
-    /// ```
-
     pub fn routes(mut self, routes: Routes) -> Self {
-        let mut get_routes = HashMap::new();
-        let mut post_routes = HashMap::new();
         let routes = routes.get_stream();
+        let mut get_routes = HashMap::with_capacity(routes.len());
+        let mut post_routes = HashMap::with_capacity(routes.len());
 
         for route in routes {
             match route.get_method() {
@@ -243,28 +206,12 @@ impl Config {
                 }
             }
         }
-        if !get_routes.is_empty() {
-            self.get_routes = Some(get_routes);
-        } else {
-            self.get_routes = None;
-        }
 
-        if !post_routes.is_empty() {
-            self.post_routes = Some(post_routes);
-        } else {
-            self.post_routes = None;
-        }
+        self.get_routes = (!get_routes.is_empty()).then_some(get_routes);
+        self.post_routes = (!post_routes.is_empty()).then_some(post_routes);
 
         self
     }
-
-    /// Enables SSL
-    ///
-    /// ### Example:
-    /// ```ignore
-    /// let config = Config::new().ssl("./fullchain.pem", "./privkey.pem");
-    /// ```
-    /// This will only accept HTTPS connections
 
     pub fn ssl(mut self, ssl_chain: String, ssl_priv: String) -> Self {
         self.ssl_chain = Some(ssl_chain);
@@ -272,18 +219,14 @@ impl Config {
         self.ssl = true;
         self
     }
+
     pub fn debug(mut self) -> Self {
         self.debug = true;
         self
     }
 
-    /// Define custom headers
-    ///
-    /// ```ignore
-    /// let config = Config::new().headers(vec!["Access-Control-Allow-Origin: *".into()]);
-    /// ```
     pub fn headers(mut self, headers: Vec<String>) -> Self {
-        let mut hash_map: HashMap<String, String> = HashMap::new();
+        let mut hash_map: HashMap<String, String> = HashMap::with_capacity(headers.len());
         for i in headers {
             let mut split = i.split_inclusive(": ");
             hash_map.insert(
@@ -301,7 +244,6 @@ impl Config {
         self
     }
 
-    /// Enables gzip compression
     pub fn gzip(mut self, res: bool) -> Self {
         self.gzip = res;
         self
@@ -324,75 +266,70 @@ impl Config {
     pub fn get_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }
+
+    pub fn can_use_prebuilt_routes(&self) -> bool {
+        self.headers.is_none() && !self.gzip
+    }
+
     pub fn get_gzip(&self) -> bool {
         self.gzip
     }
+
     pub fn get_debug(&self) -> bool {
         self.debug
     }
+
     pub fn get_mount(&self) -> Option<&String> {
         self.mount_point.as_ref()
     }
+
+    pub fn route_for(&self, method: Method, req_path: &str) -> Option<&dyn Route> {
+        match method {
+            Method::GET => self.get_routes(req_path),
+            Method::POST => self.post_routes(req_path),
+        }
+    }
+
     pub fn get_routes(&self, req_path: &str) -> Option<&dyn Route> {
-        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
-            let mut chars = req_path.chars();
-            chars.next_back();
-            chars.as_str()
-        } else {
-            req_path
-        };
-
         #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &req_path);
+        log::trace!("get_routes -> new_path: {}", req_path);
 
-        let routes = self.get_routes.as_ref()?;
-
-        if let Some(route) = routes.get(req_path) {
-            return Some(route.deref());
-        }
-
-        if let Some((_, wildcard_route)) = routes
-            .iter()
-            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
-        {
-            return Some(wildcard_route.deref());
-        }
-
-        None
+        self.find_route(self.get_routes.as_ref()?, req_path)
     }
 
     pub fn post_routes(&self, req_path: &str) -> Option<&dyn Route> {
         #[cfg(feature = "log")]
         log::trace!("post_routes -> path: {}", req_path);
 
-        let req_path = if req_path.ends_with('/') && req_path.matches('/').count() > 1 {
-            let mut chars = req_path.chars();
-            chars.next_back();
-            chars.as_str()
-        } else {
-            req_path
-        };
+        self.find_route(self.post_routes.as_ref()?, req_path)
+    }
 
-        #[cfg(feature = "log")]
-        log::trace!("get_routes -> new_path: {}", &req_path);
-
-        let routes = self.post_routes.as_ref()?;
+    fn find_route<'a>(
+        &self,
+        routes: &'a HashMap<String, Box<dyn Route>>,
+        req_path: &str,
+    ) -> Option<&'a dyn Route> {
+        let req_path = normalize_req_path(req_path);
 
         if let Some(route) = routes.get(req_path) {
             return Some(route.deref());
         }
 
-        if let Some((_, wildcard_route)) = routes
+        routes
             .iter()
-            .find(|(path, route)| req_path.starts_with(*path) && route.wildcard().is_some())
-        {
-            return Some(wildcard_route.deref());
-        }
-
-        None
+            .find(|(path, route)| req_path.starts_with(path.as_str()) && route.wildcard().is_some())
+            .map(|(_, route)| route.deref())
     }
 
     pub fn get_spa(&self) -> bool {
         self.spa
+    }
+}
+
+fn normalize_req_path(req_path: &str) -> &str {
+    if req_path.len() > 1 && req_path.ends_with('/') {
+        &req_path[..req_path.len() - 1]
+    } else {
+        req_path
     }
 }

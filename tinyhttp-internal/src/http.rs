@@ -1,14 +1,14 @@
 use std::{
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead, BufReader, Read, Write},
     net::TcpStream,
     path::Path,
     sync::Arc,
 };
 
-use std::{fs::File, io::Read};
+use memchr::{memchr, memmem};
 
 use crate::{
-    config::{Config, HttpListener},
+    config::{Config, HttpListener, Method},
     headers::HeaderMap,
     request::{Request, RequestError},
     response::Response,
@@ -16,7 +16,8 @@ use crate::{
 
 #[cfg(feature = "sys")]
 use flate2::{write::GzEncoder, Compression};
-use unicase::Ascii;
+
+const MAX_HEADER_BYTES: usize = 16 * 1024;
 
 pub fn start_http(http: HttpListener, config: Config) {
     #[cfg(feature = "log")]
@@ -46,105 +47,164 @@ pub fn start_http(http: HttpListener, config: Config) {
     }
 }
 
+#[derive(Clone, Debug)]
+struct ParsedRequestLine {
+    method: Method,
+    path: String,
+    version: String,
+}
+
+fn parse_request_line(line: &str) -> Result<ParsedRequestLine, RequestError> {
+    let line = line.trim_end_matches(['\r', '\n']);
+    let mut parts = line.split_whitespace();
+
+    let method = parts.next().ok_or(RequestError::StatusLineErr)?;
+    let path = parts.next().ok_or(RequestError::StatusLineErr)?;
+    let version = parts.next().ok_or(RequestError::StatusLineErr)?;
+
+    Ok(ParsedRequestLine {
+        method: Method::from_str(method),
+        path: path.to_string(),
+        version: version.to_string(),
+    })
+}
+
 fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
-    let mut buf_reader = BufReader::new(conn);
+    let mut buf_reader = BufReader::with_capacity(8192, conn);
     let mut status_line_str = String::new();
+    buf_reader
+        .read_line(&mut status_line_str)
+        .map_err(|_| RequestError::StatusLineErr)?;
 
-    buf_reader.read_line(&mut status_line_str).unwrap();
-    status_line_str.drain(status_line_str.len() - 2..status_line_str.len());
+    let request_line = parse_request_line(&status_line_str)?;
+    build_and_parse_req_from_reader(&mut buf_reader, request_line)
+}
 
+fn build_and_parse_req_from_reader<P: Read>(
+    buf_reader: &mut BufReader<P>,
+    request_line: ParsedRequestLine,
+) -> Result<Request, RequestError> {
     #[cfg(feature = "log")]
-    log::trace!("STATUS LINE: {:#?}", status_line_str);
+    log::trace!(
+        "STATUS LINE: {} {} {}",
+        request_line.method.as_str(),
+        request_line.path,
+        request_line.version
+    );
 
-    let iter = buf_reader.fill_buf().unwrap();
-    let header_end_idx = iter
-        .windows(4)
-        .position(|w| matches!(w, b"\r\n\r\n"))
-        .unwrap();
+    let mut headers_buf = Vec::with_capacity(1024);
 
-    #[cfg(feature = "log")]
-    log::trace!("Body starts at {}", header_end_idx);
-    let headers_buf = iter[..header_end_idx + 2].to_vec();
+    loop {
+        let base = headers_buf.len();
+        let available = buf_reader
+            .fill_buf()
+            .map_err(|_| RequestError::HeadersErr)?;
 
-    buf_reader.consume(header_end_idx + 4); // Add 4 bytes since header_end_idx does not count
-                                            // \r\n\r\n
+        if available.is_empty() {
+            return Err(RequestError::HeadersErr);
+        }
 
-    let mut headers = HeaderMap::new();
-    let mut headers_index = 0;
+        headers_buf.extend_from_slice(available);
 
-    let mut headers_buf_iter = headers_buf.windows(2).enumerate();
+        if let Some(header_end) = memmem::find(&headers_buf, b"\r\n\r\n") {
+            let consumed_from_available = (header_end + 4)
+                .saturating_sub(base)
+                .min(available.len());
 
-    //Sort through all request headers
-    while let Some(header_index) = headers_buf_iter
-        .find(|(_, w)| matches!(*w, b"\r\n"))
-        .map(|(i, _)| i)
-    {
-        #[cfg(feature = "log")]
-        log::trace!("header index: {}", header_index);
-
-        let header = std::str::from_utf8(&headers_buf[headers_index..header_index]).unwrap();
-
-        if header.is_empty() {
+            buf_reader.consume(consumed_from_available);
+            headers_buf.truncate(header_end + 2);
             break;
         }
-        #[cfg(feature = "log")]
-        log::trace!("HEADER: {:?}", header);
 
-        headers_index = header_index + 2;
+        if headers_buf.len() > MAX_HEADER_BYTES {
+            return Err(RequestError::HeadersErr);
+        }
 
-        let mut colon_split = header.splitn(2, ':');
-        headers.set(
-            colon_split.next().unwrap(),
-            colon_split.next().unwrap().trim(),
-        );
+        let len = available.len();
+        buf_reader.consume(len);
+    }
+
+    let mut headers = HeaderMap::with_capacity(16);
+
+    for line in headers_buf.split(|byte| *byte == b'\n') {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        if line.is_empty() {
+            break;
+        }
+
+        let colon_idx = memchr(b':', line).ok_or(RequestError::HeadersErr)?;
+        let key = std::str::from_utf8(&line[..colon_idx]).map_err(|_| RequestError::HeadersErr)?;
+        let value =
+            std::str::from_utf8(trim_ascii(&line[colon_idx + 1..])).map_err(|_| RequestError::HeadersErr)?;
+
+        headers.set(key, value);
     }
 
     let body_len = headers
-        .get(Ascii::new("Content-Length".to_string()))
+        .get("Content-Length")
         .map(|str| str.parse::<usize>().unwrap())
         .unwrap_or(0usize);
 
     let mut raw_body = vec![0; body_len];
-    buf_reader.read_exact(&mut raw_body).unwrap();
+    buf_reader
+        .read_exact(&mut raw_body)
+        .map_err(|_| RequestError::HeadersErr)?;
 
-    Ok(Request::new(
+    Ok(Request::new_parts(
         raw_body,
         headers,
-        status_line_str
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect(),
+        request_line.method,
+        request_line.path,
+        request_line.version,
         None,
     ))
 }
 
-fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Response {
-    let status_line = req.get_status_line();
-    #[cfg(feature = "log")]
-    log::trace!("build_res -> req_path: {}", status_line[1]);
+fn trim_ascii(mut bytes: &[u8]) -> &[u8] {
+    while let Some((first, rest)) = bytes.split_first() {
+        if !first.is_ascii_whitespace() {
+            break;
+        }
+        bytes = rest;
+    }
 
-    match status_line[0].as_str() {
-        "GET" => match config.get_routes(&status_line[1]) {
+    while let Some((last, rest)) = bytes.split_last() {
+        if !last.is_ascii_whitespace() {
+            break;
+        }
+        bytes = rest;
+    }
+
+    bytes
+}
+
+fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Response {
+    #[cfg(feature = "log")]
+    log::trace!("build_res -> req_path: {}", req.path());
+
+    match req.method() {
+        Method::GET => match config.get_routes(req.path()) {
             Some(route) => {
                 #[cfg(feature = "log")]
                 log::trace!("Found path in routes!");
 
-                if route.wildcard().is_some() {
-                    let stat_line = &status_line[1];
-                    let split = stat_line
-                        .split(&(route.get_path().to_string() + "/"))
-                        .last()
-                        .unwrap();
+                let wildcard = route.wildcard().and_then(|_| {
+                    req.path()
+                        .strip_prefix(route.get_path())
+                        .and_then(|suffix| suffix.strip_prefix('/'))
+                        .map(ToOwned::to_owned)
+                });
 
-                    req.set_wildcard(Some(split.into()));
-                };
+                if wildcard.is_some() {
+                    req.set_wildcard(wildcard);
+                }
 
                 route.to_res(req, sock)
             }
 
             None => match config.get_mount() {
                 Some(old_path) => {
-                    let path = old_path.to_owned() + &status_line[1];
+                    let path = old_path.to_owned() + req.path();
                     if Path::new(&path).extension().is_none() && config.get_spa() {
                         let body = read_to_vec(old_path.to_owned() + "/index.html").unwrap();
                         let line = "HTTP/1.1 200 OK\r\n";
@@ -171,7 +231,7 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
                                 .mime("text/html")
                         } else {
                             Response::new()
-                                .status_line("HTTP/1.1 200 OK\r\n")
+                                .status_line("HTTP/1.1 404 NOT FOUND\r\n")
                                 .body(b"<h1>404 Not Found</h1>".to_vec())
                                 .mime("text/html")
                         }
@@ -196,21 +256,21 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
                     .mime("text/html"),
             },
         },
-        "POST" => match config.post_routes(&status_line[1]) {
+        Method::POST => match config.post_routes(req.path()) {
             Some(route) => {
                 #[cfg(feature = "log")]
                 log::debug!("POST");
 
-                if route.wildcard().is_some() {
-                    let stat_line = &status_line[1];
+                let wildcard = route.wildcard().and_then(|_| {
+                    req.path()
+                        .strip_prefix(route.get_path())
+                        .and_then(|suffix| suffix.strip_prefix('/'))
+                        .map(ToOwned::to_owned)
+                });
 
-                    let split = stat_line
-                        .split(&(route.get_path().to_string() + "/"))
-                        .last()
-                        .unwrap();
-
-                    req.set_wildcard(Some(split.into()));
-                };
+                if wildcard.is_some() {
+                    req.set_wildcard(wildcard);
+                }
 
                 route.to_res(req, sock)
             }
@@ -220,16 +280,65 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
                 .body(b"<h1>404 Not Found</h1>".to_vec())
                 .mime("text/html"),
         },
-
-        _ => Response::new()
-            .status_line("HTTP/1.1 404 NOT FOUND\r\n")
-            .body(b"<h1>Unkown Error Occurred</h1>".to_vec())
-            .mime("text/html"),
     }
 }
 
 pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
-    let request = build_and_parse_req(conn);
+    let mut buf_reader = BufReader::with_capacity(8192, conn);
+    let mut status_line_str = String::new();
+
+    if buf_reader.read_line(&mut status_line_str).is_err() {
+        Response::new()
+            .mime("text/plain")
+            .body(b"failed to parse status line".to_vec())
+            .send(buf_reader.get_mut());
+        return;
+    }
+
+    let request_line = match parse_request_line(&status_line_str) {
+        Ok(line) => line,
+        Err(_) => {
+            Response::new()
+                .mime("text/plain")
+                .body(b"failed to parse status line".to_vec())
+                .send(buf_reader.get_mut());
+            return;
+        }
+    };
+
+    if let Some(route) = config.route_for(request_line.method, &request_line.path) {
+        if !route.needs_request() && !config.get_gzip() {
+            if config.can_use_prebuilt_routes() {
+                if let Some(cached) = route.cached_response() {
+                    buf_reader.get_mut().write_all(cached).unwrap();
+                    return;
+                }
+            }
+
+            let request = Request::new_parts(
+                Vec::new(),
+                HeaderMap::new(),
+                request_line.method,
+                request_line.path.clone(),
+                request_line.version.clone(),
+                None,
+            );
+            let response = route.to_res(request, buf_reader.get_mut());
+
+            if response.manual_override {
+                buf_reader
+                    .get_mut()
+                    .shutdown(std::net::Shutdown::Both)
+                    .unwrap();
+                return;
+            }
+
+            finish_response(response, &config, false, buf_reader.get_mut());
+            return;
+        }
+    }
+
+    let request = build_and_parse_req_from_reader(&mut buf_reader, request_line);
 
     let request = match request {
         Ok(request) => request,
@@ -241,112 +350,79 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
             Response::new()
                 .mime("text/plain")
                 .body(specific_err)
-                .send(conn);
+                .send(buf_reader.get_mut());
 
             return;
         }
     };
 
-    /*#[cfg(feature = "middleware")]
-    if let Some(req_middleware) = config.get_request_middleware() {
-        req_middleware.lock().unwrap()(&mut request);
-    };*/
+    let compress = config.get_gzip()
+        && request
+            .get_headers()
+            .get("Accept-Encoding")
+            .map(|tmp_str| {
+                tmp_str
+                    .split(',')
+                    .any(|encoding| encoding.trim().eq_ignore_ascii_case("gzip"))
+            })
+            .unwrap_or(false);
 
-    let req_headers = request.get_headers();
-    let _comp = if config.get_gzip() {
-        if req_headers.contains("Accept-Encoding") {
-            let tmp_str = req_headers.get("Accept-Encoding").unwrap();
-            let res: Vec<&str> = tmp_str.split(',').map(|s| s.trim()).collect();
-
-            #[cfg(feature = "log")]
-            log::trace!("{:#?}", &res);
-
-            res.contains(&"gzip")
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-
-    let mut response = build_res(request, &config, conn);
+    let response = build_res(request, &config, buf_reader.get_mut());
     if response.manual_override {
-        conn.shutdown(std::net::Shutdown::Both).unwrap();
+        buf_reader
+            .get_mut()
+            .shutdown(std::net::Shutdown::Both)
+            .unwrap();
         return;
     }
 
-    match response.mime {
-        Some(ref t) => {
-            response
-                .headers
-                .insert("Content-Type".to_string(), t.to_owned());
-        }
-        None => {
-            if let Some(body) = &response.body {
-                let mime = infer::get(body)
-                    .map(|mime| mime.mime_type())
-                    .unwrap_or("text/plain");
+    finish_response(response, &config, compress, buf_reader.get_mut());
+}
 
-                response
-                    .headers
-                    .insert("Content-Type".to_string(), mime.to_string());
-            }
-        }
+fn finish_response(mut response: Response, config: &Config, compress: bool, conn: &mut TcpStream) {
+    if response.is_prebuilt() {
+        response.send(conn);
+        return;
     }
 
+    response.add_content_type_if_missing();
+
     if let Some(config_headers) = config.get_headers() {
-        response.headers.extend(
+        response.extend_headers(
             config_headers
                 .iter()
                 .map(|(i, j)| (i.to_owned(), j.to_owned())),
         );
     }
 
-    response.headers.extend([(
-        "tinyhttp".to_string(),
-        env!("CARGO_PKG_VERSION").to_string(),
-    )]);
-
-    // Only check for 'accept-encoding' header
-    // when compression is enabled
+    response.add_tinyhttp_header();
 
     #[cfg(feature = "sys")]
     {
-        if _comp {
+        if compress && response.body_len() >= 512 {
             use std::io::Write;
-            let mut writer = GzEncoder::new(Vec::new(), Compression::default());
-            writer.write_all(response.body.as_ref().unwrap()).unwrap();
-            response.body = Some(writer.finish().unwrap());
-            response
-                .headers
-                .insert("Content-Encoding".to_string(), "gzip".to_string());
+
+            let mut writer = GzEncoder::new(Vec::new(), Compression::fast());
+            if let Some(body) = response.body_bytes() {
+                writer.write_all(body).unwrap();
+                response.replace_body(writer.finish().unwrap());
+                response.insert_header("Content-Encoding", "gzip");
+            }
         }
     }
 
     #[cfg(feature = "log")]
     {
         log::trace!(
-            "RESPONSE BODY: {:#?},\n RESPONSE HEADERS: {:#?}\n",
-            response.body.as_ref().unwrap(),
+            "RESPONSE BODY LEN: {},\n RESPONSE HEADERS: {:#?}\n",
+            response.body_len(),
             response.headers,
         );
     }
-
-    /*#[cfg(feature = "middleware")]
-    if let Some(middleware) = config.get_response_middleware() {
-        middleware.lock().unwrap()(res_brw.deref_mut());
-    }*/
 
     response.send(conn);
 }
 
 fn read_to_vec<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    fn inner(path: &Path) -> io::Result<Vec<u8>> {
-        let file = File::open(path).unwrap();
-        let mut content: Vec<u8> = Vec::new();
-        let mut reader = BufReader::new(file);
-        reader.read_to_end(&mut content).unwrap();
-        Ok(content)
-    }
-    inner(path.as_ref())
+    std::fs::read(path)
 }

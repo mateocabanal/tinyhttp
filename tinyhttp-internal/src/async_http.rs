@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
-
 use tokio::{fs::File, io::AsyncReadExt, io::AsyncWriteExt, select};
 
 use crate::{
@@ -10,7 +9,6 @@ use crate::{
     request::{Request, RequestError},
     response::Response,
 };
-
 
 pub(crate) async fn start_http(http: HttpListener) {
     loop {
@@ -237,7 +235,6 @@ async fn build_res(req: &mut Request, config: &mut Config) -> Response {
     }
 }
 
-
 pub(crate) async fn read_stream<P: AsyncReadExt + Unpin>(stream: &mut P) -> Vec<u8> {
     let buffer_size = 1024;
     let mut request_buffer = vec![];
@@ -264,7 +261,6 @@ pub(crate) async fn read_stream<P: AsyncReadExt + Unpin>(stream: &mut P) -> Vec<
     request_buffer
 }
 
-
 pub async fn read_to_vec<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
     async fn inner(path: &Path) -> std::io::Result<Vec<u8>> {
         use tokio::io::BufReader;
@@ -276,7 +272,6 @@ pub async fn read_to_vec<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
     }
     inner(path.as_ref()).await
 }
-
 
 async fn parse_request<P: AsyncReadExt + AsyncWriteExt + Unpin>(conn: &mut P, mut config: Config) {
     let buf = read_stream(conn).await;
@@ -346,10 +341,10 @@ async fn parse_request<P: AsyncReadExt + AsyncWriteExt + Unpin>(conn: &mut P, mu
         );
     }
 
-//    #[cfg(feature = "middleware")]
-//    if let Some(middleware) = config.get_response_middleware() {
-//        middleware.lock().unwrap()(res_brw.deref_mut());
-//    }
+    //    #[cfg(feature = "middleware")]
+    //    if let Some(middleware) = config.get_response_middleware() {
+    //        middleware.lock().unwrap()(res_brw.deref_mut());
+    //    }
 
     res_brw.send(conn).await;
 }
