@@ -1,17 +1,21 @@
+use smallvec::SmallVec;
+
 #[derive(Default, Debug, Clone)]
 pub struct HeaderMap {
-    inner: Vec<(String, String)>,
+    inner: SmallVec<[(String, String); 16]>,
 }
 
 impl HeaderMap {
     pub fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: SmallVec::new(),
+        }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            inner: Vec::with_capacity(capacity),
-        }
+        let mut inner = SmallVec::new();
+        inner.reserve(capacity);
+        Self { inner }
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {

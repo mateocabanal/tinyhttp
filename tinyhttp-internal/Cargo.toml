@@ -16,6 +16,7 @@ itoa = "1.0"
 memchr = "2.7"
 num_cpus = "1.16.0"
 rusty_pool = "0.7.0"
+smallvec = "1.13"
 thiserror = "1"
 unicase = "2.8.1"
 

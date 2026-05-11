@@ -5,7 +5,7 @@ use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Ident, LitStr, Token,
+    Ident, LitStr, ReturnType, Token, Type, TypeReference,
 };
 
 struct RouteAttr {
@@ -33,6 +33,46 @@ impl Parse for RouteAttr {
         }
 
         Ok(RouteAttr { path, cache })
+    }
+}
+
+fn returns_static_str(return_type: &ReturnType) -> bool {
+    let ReturnType::Type(_, ty) = return_type else {
+        return false;
+    };
+
+    let Type::Reference(TypeReference {
+        lifetime: Some(lifetime),
+        elem,
+        ..
+    }) = ty.as_ref()
+    else {
+        return false;
+    };
+
+    if lifetime.ident != "static" {
+        return false;
+    }
+
+    let Type::Path(path) = elem.as_ref() else {
+        return false;
+    };
+
+    path.qself.is_none() && path.path.segments.len() == 1 && path.path.segments[0].ident == "str"
+}
+
+fn response_expr(return_type: &ReturnType, body: &syn::Block) -> proc_macro2::TokenStream {
+    if returns_static_str(return_type) {
+        quote! {
+            Response::new()
+                .body_static((#body).as_bytes())
+                .mime("text/plain")
+                .status_line("HTTP/1.1 200 OK\r\n")
+        }
+    } else {
+        quote! {
+            #body.into()
+        }
     }
 }
 
@@ -66,7 +106,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let span = return_type.span();
-    let return_error = match return_type {
+    let return_error = match &return_type {
         syn::ReturnType::Default => Some(
             syn::Error::new(span, "You're forgetting to return something...").into_compile_error(),
         ),
@@ -86,6 +126,8 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
 
+    let response = response_expr(&return_type, body);
+
     let new_get_body = if attr.cache {
         quote! {
             let mut get_route = CachedRoute::new()
@@ -93,7 +135,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .set_path(#path.into());
 
             fn body() -> Response {
-                #body.into()
+                #response
             }
 
             get_route = get_route.set_body(body);
@@ -112,7 +154,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn body<'b>(try_from_req: &'b mut Request, _sock: &'b mut std::net::TcpStream) -> Response {
                 let #arg_type = try_from_req.into();
-                #body.into()
+                #response
             }
 
             get_route = get_route.set_body(body);
@@ -123,7 +165,7 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .set_path(#path.into());
 
             fn body() -> Response {
-                #body.into()
+                #response
             }
 
             get_route = get_route.set_body(body);
@@ -169,7 +211,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let return_error = match return_type {
+    let return_error = match &return_type {
         syn::ReturnType::Default => Some(
             syn::Error::new(
                 return_type.span(),
@@ -193,6 +235,8 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
 
+    let response = response_expr(&return_type, body);
+
     let new_post_body = if attr.cache {
         quote! {
             let mut post_route = CachedRoute::new()
@@ -200,7 +244,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .set_path(#path.into());
 
             fn body() -> Response {
-                #body.into()
+                #response
             }
 
             post_route = post_route.set_body(body);
@@ -218,7 +262,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn body<'b>(try_from_req: &'b mut Request, _sock: &'b mut std::net::TcpStream) -> Response {
                 let #arg_type = try_from_req.into();
-                #body.into()
+                #response
             }
 
             post_route = post_route.set_body(body);
@@ -229,7 +273,7 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .set_path(#path.into());
 
             fn body() -> Response {
-                #body.into()
+                #response
             }
 
             post_route = post_route.set_body(body);

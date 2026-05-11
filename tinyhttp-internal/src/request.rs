@@ -1,4 +1,4 @@
-use std::{fmt::Display, mem};
+use std::{cell::OnceCell, fmt::Display, mem};
 
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ impl<T: Display> Wildcard<T> {
 #[derive(Clone, Debug)]
 pub struct Request {
     raw_headers: HeaderMap,
-    status_line: Vec<String>,
+    status_line: OnceCell<[String; 3]>,
     method: Method,
     path: String,
     version: String,
@@ -41,7 +41,7 @@ impl Default for Request {
     fn default() -> Self {
         Self {
             raw_headers: HeaderMap::new(),
-            status_line: vec!["GET".to_string(), "/".to_string(), "HTTP/1.1".to_string()],
+            status_line: OnceCell::new(),
             method: Method::GET,
             path: "/".to_string(),
             version: "HTTP/1.1".to_string(),
@@ -78,16 +78,21 @@ impl Request {
             .cloned()
             .unwrap_or_else(|| "HTTP/1.1".to_string());
 
-        Request {
+        let status_array = [method.as_str().to_string(), path.clone(), version.clone()];
+
+        let request = Request {
             body,
             raw_headers,
-            status_line,
+            status_line: OnceCell::new(),
             method,
             path,
             version,
             wildcard,
             is_http2: false,
-        }
+        };
+
+        let _ = request.status_line.set(status_array);
+        request
     }
 
     pub(crate) fn new_parts(
@@ -98,12 +103,10 @@ impl Request {
         version: String,
         wildcard: Option<String>,
     ) -> Request {
-        let status_line = vec![method.as_str().to_string(), path.clone(), version.clone()];
-
         Request {
             body,
             raw_headers,
-            status_line,
+            status_line: OnceCell::new(),
             method,
             path,
             version,
@@ -150,9 +153,18 @@ impl Request {
     /// Get status line of request.
     ///
     /// This legacy accessor remains for compatibility. New internal code should
-    /// prefer `method()`, `path()`, and `version()` to avoid vector indexing.
+    /// prefer `method()`, `path()`, and `version()` to avoid vector-style
+    /// status-line allocation until this accessor is actually used.
     pub fn get_status_line(&self) -> &[String] {
-        &self.status_line
+        self.status_line
+            .get_or_init(|| {
+                [
+                    self.method.as_str().to_string(),
+                    self.path.clone(),
+                    self.version.clone(),
+                ]
+            })
+            .as_slice()
     }
 
     pub fn get_wildcard(&self) -> Option<&String> {

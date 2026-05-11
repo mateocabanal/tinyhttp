@@ -64,6 +64,10 @@ pub trait Route: DynClone + Sync + Send + ToResponse {
         true
     }
 
+    fn to_res_no_req(&self, sock: &mut TcpStream) -> Response {
+        self.to_res(Request::default(), sock)
+    }
+
     fn cached_response(&self) -> Option<&[u8]> {
         None
     }

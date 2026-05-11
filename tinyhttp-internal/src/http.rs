@@ -1,11 +1,12 @@
 use std::{
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{self, Read, Write},
     net::TcpStream,
     path::Path,
     sync::Arc,
 };
 
 use memchr::{memchr, memmem};
+use smallvec::SmallVec;
 
 use crate::{
     config::{Config, HttpListener, Method},
@@ -18,6 +19,7 @@ use crate::{
 use flate2::{write::GzEncoder, Compression};
 
 const MAX_HEADER_BYTES: usize = 16 * 1024;
+const INITIAL_READ_BYTES: usize = 8192;
 
 pub fn start_http(http: HttpListener, config: Config) {
     #[cfg(feature = "log")]
@@ -47,14 +49,14 @@ pub fn start_http(http: HttpListener, config: Config) {
     }
 }
 
-#[derive(Clone, Debug)]
-struct ParsedRequestLine {
+#[derive(Clone, Copy, Debug)]
+struct ParsedRequestLine<'a> {
     method: Method,
-    path: String,
-    version: String,
+    path: &'a str,
+    version: &'a str,
 }
 
-fn parse_request_line(line: &str) -> Result<ParsedRequestLine, RequestError> {
+fn parse_request_line(line: &str) -> Result<ParsedRequestLine<'_>, RequestError> {
     let line = line.trim_end_matches(['\r', '\n']);
     let mut parts = line.split_whitespace();
 
@@ -64,26 +66,41 @@ fn parse_request_line(line: &str) -> Result<ParsedRequestLine, RequestError> {
 
     Ok(ParsedRequestLine {
         method: Method::from_str(method),
-        path: path.to_string(),
-        version: version.to_string(),
+        path,
+        version,
     })
 }
 
-fn build_and_parse_req<P: Read>(conn: &mut P) -> Result<Request, RequestError> {
-    let mut buf_reader = BufReader::with_capacity(8192, conn);
-    let mut status_line_str = String::new();
-    buf_reader
-        .read_line(&mut status_line_str)
-        .map_err(|_| RequestError::StatusLineErr)?;
-
-    let request_line = parse_request_line(&status_line_str)?;
-    build_and_parse_req_from_reader(&mut buf_reader, request_line)
-}
-
-fn build_and_parse_req_from_reader<P: Read>(
-    buf_reader: &mut BufReader<P>,
-    request_line: ParsedRequestLine,
+fn build_and_parse_req_from_initial<P: Read>(
+    conn: &mut P,
+    initial: &[u8],
 ) -> Result<Request, RequestError> {
+    let mut buf: SmallVec<[u8; 2048]> = SmallVec::new();
+    buf.extend_from_slice(initial);
+
+    let header_end = loop {
+        if let Some(header_end) = memmem::find(&buf, b"\r\n\r\n") {
+            break header_end;
+        }
+
+        if buf.len() > MAX_HEADER_BYTES {
+            return Err(RequestError::HeadersErr);
+        }
+
+        let mut tmp = [0u8; 4096];
+        let n = conn.read(&mut tmp).map_err(|_| RequestError::HeadersErr)?;
+        if n == 0 {
+            return Err(RequestError::HeadersErr);
+        }
+
+        buf.extend_from_slice(&tmp[..n]);
+    };
+
+    let line_end = memmem::find(&buf[..header_end], b"\r\n").ok_or(RequestError::StatusLineErr)?;
+    let request_line_str =
+        std::str::from_utf8(&buf[..line_end]).map_err(|_| RequestError::StatusLineErr)?;
+    let request_line = parse_request_line(request_line_str)?;
+
     #[cfg(feature = "log")]
     log::trace!(
         "STATUS LINE: {} {} {}",
@@ -92,41 +109,10 @@ fn build_and_parse_req_from_reader<P: Read>(
         request_line.version
     );
 
-    let mut headers_buf = Vec::with_capacity(1024);
-
-    loop {
-        let base = headers_buf.len();
-        let available = buf_reader
-            .fill_buf()
-            .map_err(|_| RequestError::HeadersErr)?;
-
-        if available.is_empty() {
-            return Err(RequestError::HeadersErr);
-        }
-
-        headers_buf.extend_from_slice(available);
-
-        if let Some(header_end) = memmem::find(&headers_buf, b"\r\n\r\n") {
-            let consumed_from_available = (header_end + 4)
-                .saturating_sub(base)
-                .min(available.len());
-
-            buf_reader.consume(consumed_from_available);
-            headers_buf.truncate(header_end + 2);
-            break;
-        }
-
-        if headers_buf.len() > MAX_HEADER_BYTES {
-            return Err(RequestError::HeadersErr);
-        }
-
-        let len = available.len();
-        buf_reader.consume(len);
-    }
-
     let mut headers = HeaderMap::with_capacity(16);
+    let headers_slice = &buf[line_end + 2..header_end];
 
-    for line in headers_buf.split(|byte| *byte == b'\n') {
+    for line in headers_slice.split(|byte| *byte == b'\n') {
         let line = line.strip_suffix(b"\r").unwrap_or(line);
         if line.is_empty() {
             break;
@@ -134,28 +120,41 @@ fn build_and_parse_req_from_reader<P: Read>(
 
         let colon_idx = memchr(b':', line).ok_or(RequestError::HeadersErr)?;
         let key = std::str::from_utf8(&line[..colon_idx]).map_err(|_| RequestError::HeadersErr)?;
-        let value =
-            std::str::from_utf8(trim_ascii(&line[colon_idx + 1..])).map_err(|_| RequestError::HeadersErr)?;
+        let value = std::str::from_utf8(trim_ascii(&line[colon_idx + 1..]))
+            .map_err(|_| RequestError::HeadersErr)?;
 
         headers.set(key, value);
     }
 
     let body_len = headers
         .get("Content-Length")
-        .map(|str| str.parse::<usize>().unwrap())
+        .and_then(|str| str.parse::<usize>().ok())
         .unwrap_or(0usize);
 
-    let mut raw_body = vec![0; body_len];
-    buf_reader
-        .read_exact(&mut raw_body)
-        .map_err(|_| RequestError::HeadersErr)?;
+    let body_start = header_end + 4;
+    let already_read_body = buf.get(body_start..).unwrap_or(&[]);
+
+    let mut raw_body = Vec::new();
+    if body_len > 0 {
+        raw_body.reserve_exact(body_len);
+
+        let already_len = already_read_body.len().min(body_len);
+        raw_body.extend_from_slice(&already_read_body[..already_len]);
+
+        if raw_body.len() < body_len {
+            let old_len = raw_body.len();
+            raw_body.resize(body_len, 0);
+            conn.read_exact(&mut raw_body[old_len..])
+                .map_err(|_| RequestError::HeadersErr)?;
+        }
+    }
 
     Ok(Request::new_parts(
         raw_body,
         headers,
         request_line.method,
-        request_line.path,
-        request_line.version,
+        request_line.path.to_owned(),
+        request_line.version.to_owned(),
         None,
     ))
 }
@@ -284,61 +283,55 @@ fn build_res(mut req: Request, config: &Config, sock: &mut TcpStream) -> Respons
 }
 
 pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
-    let mut buf_reader = BufReader::with_capacity(8192, conn);
-    let mut status_line_str = String::new();
-
-    if buf_reader.read_line(&mut status_line_str).is_err() {
-        Response::new()
-            .mime("text/plain")
-            .body(b"failed to parse status line".to_vec())
-            .send(buf_reader.get_mut());
-        return;
-    }
-
-    let request_line = match parse_request_line(&status_line_str) {
-        Ok(line) => line,
+    let mut initial = [0u8; INITIAL_READ_BYTES];
+    let n = match conn.read(&mut initial) {
+        Ok(0) => {
+            Response::new()
+                .mime("text/plain")
+                .body(b"failed to parse status line".to_vec())
+                .send(conn);
+            return;
+        }
+        Ok(n) => n,
         Err(_) => {
             Response::new()
                 .mime("text/plain")
                 .body(b"failed to parse status line".to_vec())
-                .send(buf_reader.get_mut());
+                .send(conn);
             return;
         }
     };
 
-    if let Some(route) = config.route_for(request_line.method, &request_line.path) {
-        if !route.needs_request() && !config.get_gzip() {
-            if config.can_use_prebuilt_routes() {
-                if let Some(cached) = route.cached_response() {
-                    buf_reader.get_mut().write_all(cached).unwrap();
-                    return;
+    let initial_read = &initial[..n];
+
+    if let Some(line_end) = memmem::find(initial_read, b"\r\n") {
+        if let Ok(request_line_str) = std::str::from_utf8(&initial_read[..line_end]) {
+            if let Ok(request_line) = parse_request_line(request_line_str) {
+                if let Some(route) = config.route_for(request_line.method, request_line.path) {
+                    if !route.needs_request() && !config.get_gzip() {
+                        if config.can_use_prebuilt_routes() {
+                            if let Some(cached) = route.cached_response() {
+                                conn.write_all(cached).unwrap();
+                                return;
+                            }
+                        }
+
+                        let response = route.to_res_no_req(conn);
+
+                        if response.manual_override {
+                            conn.shutdown(std::net::Shutdown::Both).unwrap();
+                            return;
+                        }
+
+                        finish_response(response, &config, false, conn);
+                        return;
+                    }
                 }
             }
-
-            let request = Request::new_parts(
-                Vec::new(),
-                HeaderMap::new(),
-                request_line.method,
-                request_line.path.clone(),
-                request_line.version.clone(),
-                None,
-            );
-            let response = route.to_res(request, buf_reader.get_mut());
-
-            if response.manual_override {
-                buf_reader
-                    .get_mut()
-                    .shutdown(std::net::Shutdown::Both)
-                    .unwrap();
-                return;
-            }
-
-            finish_response(response, &config, false, buf_reader.get_mut());
-            return;
         }
     }
 
-    let request = build_and_parse_req_from_reader(&mut buf_reader, request_line);
+    let request = build_and_parse_req_from_initial(conn, initial_read);
 
     let request = match request {
         Ok(request) => request,
@@ -350,7 +343,7 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
             Response::new()
                 .mime("text/plain")
                 .body(specific_err)
-                .send(buf_reader.get_mut());
+                .send(conn);
 
             return;
         }
@@ -367,16 +360,13 @@ pub fn parse_request(conn: &mut TcpStream, config: Arc<Config>) {
             })
             .unwrap_or(false);
 
-    let response = build_res(request, &config, buf_reader.get_mut());
+    let response = build_res(request, &config, conn);
     if response.manual_override {
-        buf_reader
-            .get_mut()
-            .shutdown(std::net::Shutdown::Both)
-            .unwrap();
+        conn.shutdown(std::net::Shutdown::Both).unwrap();
         return;
     }
 
-    finish_response(response, &config, compress, buf_reader.get_mut());
+    finish_response(response, &config, compress, conn);
 }
 
 fn finish_response(mut response: Response, config: &Config, compress: bool, conn: &mut TcpStream) {

@@ -84,6 +84,10 @@ impl Route for CachedRoute {
         false
     }
 
+    fn to_res_no_req(&self, _sock: &mut TcpStream) -> Response {
+        self.response.clone().unwrap()
+    }
+
     fn cached_response(&self) -> Option<&[u8]> {
         self.prebuilt.as_deref()
     }
@@ -181,6 +185,9 @@ impl Route for BasicGetRoute {
     }
     fn needs_request(&self) -> bool {
         false
+    }
+    fn to_res_no_req(&self, _sock: &mut TcpStream) -> Response {
+        self.get_body.unwrap()()
     }
 
     #[cfg(test)]
@@ -418,6 +425,9 @@ impl Route for BasicPostRoute {
     }
     fn needs_request(&self) -> bool {
         false
+    }
+    fn to_res_no_req(&self, _sock: &mut TcpStream) -> Response {
+        self.post_body.unwrap()()
     }
     #[cfg(test)]
     fn any(&self) -> &dyn Any {

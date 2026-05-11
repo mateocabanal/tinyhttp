@@ -8,12 +8,11 @@ keywords = ["http", "server"]
 description = "Provides codegen for tinyhttp"
 repository = "https://github.com/mateocabanal/tinyhttp-codegen"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 proc-macro = true
 
 [dependencies]
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1.0.18"
+proc-macro2 = "1"
 tinyhttp-internal = { path = "../tinyhttp-internal", version = "0.6.0", default-features = false }
